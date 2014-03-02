@@ -103,16 +103,19 @@ AST={
 	},
 	/**
 	@param callback a function with parameters 
-		1) treeNode  2) type (number)
+		1) treeNode  2) type (number) 3) parent
 	*/
 	visit:function(tree, callback){
 		var work = [tree];
 		while(work.length >0){
 			var node = work.shift();
 			var type = AST.type(node);
-			callback(node, type);
+			var p = node.parent;
+			delete node.parent;
+			callback(node, type, p);
 			if ( node.children!=null ) {
 				node.children.forEach(function(c){
+						c.parent = node;
 						work.push(c);
 				});
 			}
@@ -515,7 +518,10 @@ SymbolCollector.prototype ={
 						self.discoverOuterAlt(block.children[i]);
 					//}
 					break;
-					
+				case ANTLRParser.RULE_REF:
+					var ch = node.children;
+					if(ch != null && ch.length > 0 && AST.isType(ch[0],'ARG_ACTION'))
+						self.actionInAlt(ch[0]);
 				default:
 					break;
 				}
@@ -535,6 +541,10 @@ SymbolCollector.prototype ={
 	},
 	discoverOuterAlt:function(alt) {
 		this.currentRule.alt[this.currentOuterAltNumber].ast = alt;
+	},
+	actionInAlt:function(action) {
+		this.currentRule.defineActionInAlt(this.currentOuterAltNumber, action);
+		action.resolver = this.currentRule.alt[this.currentOuterAltNumber];
 	}
 };
 function SemanticPipeline(g){
