@@ -1,0 +1,36 @@
+[
+			{
+				grammarType:'PARSER',
+				type:'PARSER_GRAMMAR',
+				fileName:'grammar-ast.json',
+				children:[
+					{
+						text:'jsAntlrParser',
+						type:'ID'
+					},
+					
+					{
+						type:'RULES',
+						children:[
+							{
+								type:'RULE_REF',
+								text:'rule01',
+							},
+							
+						]
+					}
+					
+				]
+			},
+			{
+				grammarType:'LEXER',
+				type:'LEXER_GRAMMAR',
+				fileName:'grammar-ast.json',
+				children:[
+					{	type:'RULES',
+						children:[
+						]
+					}
+				]
+			}
+		]
