@@ -1,6 +1,6 @@
 var util = require('util');
 function uuid(obj){
-	return typeof(obj) == 'string'? obj: obj.uuid();
+	return typeof(obj) == 'string'? obj: (obj._uuid != null? obj._uuid : obj.uuid());
 }
 
 function OrderedHashSet(){
@@ -27,18 +27,22 @@ OrderedHashSet.prototype={
 
 function OrderedHashMap(){
 	this.map = {};
-	this.elements = [];
+	this.elements = []; // keys
 	this._size = 0;
 }
 OrderedHashMap.prototype={
 	getKey:function(i){ return this.elements.get(i); },
 	getElement:function(i) { return this.get(this.elements.get(i)); },
 	get:function(key){
-		return this.map[key];
+		return this.map[uuid(key)];
+	},
+	containsKey:function(k){
+		return uuid(key) in this.map;
 	},
 	put:function(key, value) {
-		this.map[key] = value;
+		this.map[uuid(key)] = value;
 		this.elements.push(key);
+		this._size++;
 	},
 	putAll:function(m) {
 		for(k in m){
@@ -51,18 +55,33 @@ OrderedHashMap.prototype={
 				v.push(this.get(k));
 		}, this);
 		return v;
+	},
+	size:function(){
+		return this._size;
 	}
 };
 exports.OrderedHashMap = OrderedHashMap;
 
-exports.Utils={
+var Utils={
 	capitalize:function(s){
 		return s.charAt(0).toUpperCase() + s.substring(1);
 	},
 	decapitalize:function(s){
 		return s.charAt(0).toLowerCase() + s.substring(1);
+	},
+	setSize:function(list, size){
+		if(size < list.length){
+			for(var i=size,l=list.length; i<l; i++)
+				list[i] = null;
+		}else {
+			while (size > list.length) {
+				list.push(null);
+			}
+		}
 	}
 };
+exports.Utils = Utils;
+
 exports.Graph = (function(){
 	function Graph(){
 		this.nodes = {};
@@ -144,6 +163,12 @@ exports.MultiMap = (function(){
 				pairs.push({a:key, b:this.obj[key]});
 			}
 			return pairs;
+		},
+		values:function(){
+			var v = [];
+			for(var k in this.obj)
+				v.push(this.obj[k]);
+			return v;
 		}
 	};
 	return MultiMap;
@@ -307,4 +332,84 @@ exports.MultiMap = (function(){
     };
 	exports.IntervalSet = IntervalSet;
 	exports.Interval = Interval;
+})();
+
+(function(){
+	var BITS = 32;    // number of bits / int
+    var LOG_BITS = 5; // 2^5 = 32
+    var MOD_MASK = BITS - 1;
+	function BitSet(bits_){
+		if(bits_ == null)
+			bits_ = BITS;
+		if(typeof bits_ == 'number'){
+			this.bits = new Array(((bits_ - 1) >> LOG_BITS) + 1);
+		}else{
+			this.bits = bits_;
+		}
+	}
+	BitSet.of = function(el, el2, el3, el4) {
+		switch(arguments.length){
+		case 1:
+			var s = new BitSet(el + 1);
+			s.add(el);
+			return s;
+		case 2:
+			var s = new BitSet(Math.max(el, el2)+1);
+			s.add(el);
+			s.add(el2);
+			return s;
+		default:
+			var s = new BitSet();
+			for(var i=0,l=arguments.length; i<l;i++)
+				s.add(arguments[i]);
+			return s;
+		}
+	}
+	BitSet.prototype={
+		or:function(a) {
+			throw new Error('not supported');
+		},
+		size:function() {
+			var deg = 0;
+			for (var i = this.bits.length - 1; i >= 0; i--) {
+				var word = this.bits[i];
+				if (word !== 0) {
+					for (var bit = BITS - 1; bit >= 0; bit--) {
+						if ((word & (1 << bit)) != 0) {
+							deg++;
+						}
+					}
+				}
+			}
+			return deg;
+		},
+		add:function(el) {
+			var n = el >> LOG_BITS;
+			if (n >= this.bits.length) {
+				this.growToInclude(el);
+			}
+			this.bits[n] |= this.bitMask(el);
+		},
+		numWordsToHold:function(el) {
+			return (el >> LOG_BITS) + 1;
+		},
+		growToInclude:function(bit){
+			var newSize = Math.max(this.bits.length << 1, this.numWordsToHold(bit));
+			while(this.bits.length < newSize)
+				this.bits.push(0);
+		},
+		bitMask:function(bitNumber) {
+			var bitPosition = bitNumber & MOD_MASK; // bitNumber mod BITS
+			return 1 << bitPosition;
+		},
+		member:function(el) {
+			if ( el<0 ) {
+				return false;
+			}
+			var n = el >> LOG_BITS;
+			if (n >= this.bits.length) return false;
+			return (this.bits[n] & this.bitMask(el)) != 0;
+		}
+	};
+	exports.BitSet = BitSet;
 })();
