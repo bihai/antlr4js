@@ -58,6 +58,16 @@ OrderedHashMap.prototype={
 	},
 	size:function(){
 		return this._size;
+	},
+	remove:function(key){
+		delete this.map[uuid(key)];
+		for(var i=0,l=this.elements.length; i<l; i++){
+			if(this.elements[i] == key){
+				this.elements.splice(i,1);
+				break;
+			}
+		}
+		this.size--;
 	}
 };
 exports.OrderedHashMap = OrderedHashMap;

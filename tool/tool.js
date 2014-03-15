@@ -174,6 +174,18 @@ AST={
 			return tree.children.length;
 		else
 			return 0;
+	},
+	getFirstDescendantWithType:function(tree, type){
+		if ( AST.isType(tree, type) ) return this;
+        if ( tree.children==null ) return null;
+        for (var i=0,l=tree.children.length;i<l; i++) {
+        	var t = tree.children[i];
+            
+            if ( AST.isType(t, type) ) return t;
+            var d = AST.getFirstDescendantWithType(t, type);
+            if ( d!=null ) return d;
+        }
+        return null;
 	}
 }
 AST.Token.prototype={
@@ -189,6 +201,216 @@ var Token ={
 	DEFAULT_CHANNEL: 0,
 	HIDDEN_CHANNEL:1
 };
+
+var TreePatternLexer = (function(){
+	var EOF = -1;
+	var BEGIN = 1;
+	var END = 2;
+	var ID = 3;
+	var ARG = 4;
+	var PERCENT = 5;
+	var COLON = 6;
+	var DOT = 7;
+	
+function TreePatternLexer(pattern){
+	this.p = -1;
+	this.sval = '';
+	this.error = false;
+	this.pattern = pattern;
+	this.n = pattern.length();
+	this.consume();
+}
+TreePatternLexer.prototype={
+	nextToken:function(){
+		this.sval = ''; // reset, but reuse buffer
+		while ( this.c != EOF ) {
+			if ( this.c==' ' || this.c=='\n' || this.c=='\r' || this.c=='\t' ) {
+				this.consume();
+				continue;
+			}
+			if ( (this.c >='a' && this.c <='z') || (this.c >='A' && this.c <='Z') || this.c=='_' ) {
+				this.sval += this.c;
+				this.consume();
+				while ( (this.c >='a' && this.c <='z') || (this.c>='A' && this.c<='Z') ||
+						(this.c >='0' && this.c<='9') || this.c=='_' )
+				{
+					this.sval += this.c;
+					this.consume();
+				}
+				return ID;
+			}
+			if ( this.c=='(' ) {
+				this.consume();
+				return BEGIN;
+			}
+			if ( this.c==')' ) {
+				this.consume();
+				return END;
+			}
+			if ( this.c=='%' ) {
+				this.consume();
+				return PERCENT;
+			}
+			if ( this.c==':' ) {
+				this.consume();
+				return COLON;
+			}
+			if ( this.c=='.' ) {
+				this.consume();
+				return DOT;
+			}
+			if ( this.c=='[' ) { // grab [x] as a string, returning x
+				this.consume();
+				while ( this.c!=']' ) {
+					if ( this.c=='\\' ) {
+						this.consume();
+						if ( this.c!=']' ) {
+							this.sval+='\\';
+						}
+						this.sval += this.c;
+					}
+					else {
+						this.sval += this.c;
+					}
+					this.consume();
+				}
+				this.consume();
+				return ARG;
+			}
+			this.consume();
+			this.error = true;
+			return EOF;
+		}
+		return EOF;
+	},
+	consume:function() {
+		this.p++;
+		if ( this.p>=this.n ) {
+			this.c = EOF;
+		}
+		else {
+			this.c = this.pattern.charAt(this.p);
+		}
+	}
+};
+
+function TreePatternParser(tokenizer, wizard, adaptor){
+	this.tokenizer = tokenizer;
+	this.wizard = wizard;
+	this.adaptor = adaptor;
+	this.ttype = tokenizer.nextToken(); // kickstart
+}
+TreePatternParser.prototype={
+	pattern:function() {
+		if ( this.ttype==BEGIN ) {
+			return this.parseTree();
+		}
+		else if ( this.ttype==ID ) {
+			var node = this.parseNode();
+			if ( this.ttype==EOF ) {
+				return node;
+			}
+			return null; // extra junk on end
+		}
+		return null;
+	},
+	parseTree:function() {
+		if ( this.ttype != BEGIN ) {
+			throw new Error("no BEGIN");
+		}
+		this.ttype = this.tokenizer.nextToken();
+		var root = this.parseNode();
+		if ( root==null ) {
+			return null;
+		}
+		while ( this.ttype==BEGIN ||
+				this.ttype== ID ||
+				this.ttype== PERCENT ||
+				this.ttype== DOT )
+		{
+			if ( this.ttype== BEGIN ) {
+				var subtree = this.parseTree();
+				this.adaptor.addChild(root, subtree);
+			}
+			else {
+				var child = this.parseNode();
+				if ( child==null ) {
+					return null;
+				}
+				this.adaptor.addChild(root, child);
+			}
+		}
+		if ( this.ttype != END ) {
+			throw new Error("no END");
+		}
+		this.ttype = this.tokenizer.nextToken();
+		return root;
+	}
+	/* parseNode:function() {
+		// "%label:" prefix
+		var label = null;
+		if ( this.ttype == PERCENT ) {
+			this.ttype = tokenizer.nextToken();
+			if ( this.ttype != ID ) {
+				return null;
+			}
+			label = this.tokenizer.sval.toString();
+			this.ttype = this.tokenizer.nextToken();
+			if ( this.ttype != COLON ) {
+				return null;
+			}
+			this.ttype = this.tokenizer.nextToken(); // move to ID following colon
+		}
+
+		// Wildcard?
+		if ( this.ttype == DOT ) {
+			this.ttype = this.tokenizer.nextToken();
+			var wildcardPayload = new CommonToken(0, ".");
+			var node =
+				new TreeWizard.WildcardTreePattern(wildcardPayload);
+			if ( label!=null ) {
+				node.label = label;
+			}
+			return node;
+		}
+
+		// "ID" or "ID[arg]"
+		if ( ttype != TreePatternLexer.ID ) {
+			return null;
+		}
+		String tokenName = tokenizer.sval.toString();
+		ttype = tokenizer.nextToken();
+		if ( tokenName.equals("nil") ) {
+			return adaptor.nil();
+		}
+		String text = tokenName;
+		// check for arg
+		String arg = null;
+		if ( ttype == TreePatternLexer.ARG ) {
+			arg = tokenizer.sval.toString();
+			text = arg;
+			ttype = tokenizer.nextToken();
+		}
+		
+		// create node
+		int treeNodeType = wizard.getTokenType(tokenName);
+		if ( treeNodeType==Token.INVALID_TOKEN_TYPE ) {
+			return null;
+		}
+		Object node;
+		node = adaptor.create(treeNodeType, text);
+		if ( label!=null && node.getClass()==TreeWizard.TreePattern.class ) {
+			((TreeWizard.TreePattern)node).label = label;
+		}
+		if ( arg!=null && node.getClass()==TreeWizard.TreePattern.class ) {
+			((TreeWizard.TreePattern)node).hasTextArg = true;
+		}
+		return node;
+	} */
+};
+return TreePatternLexer;
+})();
+
 
 function Grammar(tool, ast){
 	this.tool = tool;
@@ -206,6 +428,53 @@ function Grammar(tool, ast){
 	this.maxTokenType = Token.MIN_USER_TOKEN_TYPE -1;
 	this.initTokenSymbolTables();
 }
+Grammar.isTokenName=function(id) {
+	var  c = id.charAt(0);
+	return c.toUpperCase() == c;
+};
+Grammar.getStringLiteralAliasesFromLexerRules=function(ast){
+	var lexerRuleToStringLiteral = [];
+	var ruleNodes = AST.getNodesWithType(ast, ANTLRParser.RULE);
+	if ( ruleNodes==null || ruleNodes.length == 0 ) return null;
+	ruleNodes.forEach(function(r){
+		var name = r.children[0];
+		if(AST.isType(name, ANTLRParser.TOKEN_REF) && AST.isType(r.children[1], ANTLRParser.BLOCK)){
+			var block = r.children[1];
+			if(block.children.length != 1) return;
+			if(block.children[0].length != 1) return;
+			
+			switch(AST.type(block.children[0].type)){
+			case ANTLRParser.ALT:
+				var alt = block.children[0];
+				if(!AST.isType(alt.children[0], 'STRING_LITERAL'))
+					return;
+				if(alt.children.length == 1){
+					lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
+				}else if(alt.children.length == 2){
+					var t = AST.type(alt.children[1].type);
+					if(t == ANTLRParser.ACTION || t == ANTLRParser.SEMPRED){
+						lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
+					}
+				}
+				break;
+			case ANTLRParser.LEXER_ALT_ACTION:
+				if(block.children[0].length > 3 || block.children[0].length < 1)
+					break;
+				var alt = block.children[0].children[0];
+				if(!AST.isType(alt, ANTLRParser.ALT)) break;
+				if(alt.children.length != 1 ||
+					!AST.isType(alt.children[0].type, ANTLRParser.STRING_LITERAL))
+					break;
+				lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
+				break;
+			default:
+				break;
+			}
+		}
+	},this);
+	return lexerRuleToStringLiteral;
+};
+
 Grammar.prototype={
 	initTokenSymbolTables:function(){
 		this.tokenNameToTypeMap.put('EOF',Token.EOF);
@@ -302,6 +571,28 @@ Grammar.prototype={
 	},
 	importTokensFromTokensFile:function(){
 		
+	},
+	getOutermostGrammar:function() {
+        if ( this.parent==null ) return this;
+        return this.parent.getOutermostGrammar();
+    },
+    defineTokenAlias:function( name, lit) {
+		var ttype = this.defineTokenName(name);
+		this.stringLiteralToTypeMap.put(lit, ttype);
+		this.setTokenForType(ttype, name);
+		return ttype;
+	},
+	getTokenType:function(token) {
+		var I = null;
+		if ( token.charAt(0)=='\'') {
+			I = this.stringLiteralToTypeMap.get(token);
+		}
+		else { // must be a label like ID
+			I = this.tokenNameToTypeMap.get(token);
+		}
+		var i = (I!=null)? I : Token.INVALID_TYPE;
+		//tool.log("grammar", "grammar type "+type+" "+tokenName+"->"+i);
+		return i;
 	}
 };
 function LexerGrammar(tool, ast){
@@ -320,6 +611,8 @@ mixin(LexerGrammar.prototype,{
 
 function Tool(args){
 	this.grammarFiles = [];
+	this.generate_ATN_dot = false;
+	this.force_atn = false;
 	this.errMgr = new ErrorManager(this);
 	this.handleArgs(args);
 	this.launch_ST_inspector = false;
@@ -435,6 +728,28 @@ Tool.prototype={
 		// MAKE SURE GRAMMAR IS SEMANTICALLY CORRECT (FILL IN GRAMMAR OBJECT)
 		var sem = new SemanticPipeline(g);
 		sem.process();
+		if ( this.errMgr.getNumErrors()>prevErrors ) return;
+		var factory = null;
+		if ( g.isLexer() )
+			factory = new LexerATNFactory(g);
+		else factory = new ParserATNFactory(g);
+		g.atn = factory.createATN();
+
+		if ( this.generate_ATN_dot ) generateATNs(g);
+
+		// PERFORM GRAMMAR ANALYSIS ON ATN: BUILD DECISION DFAs
+		var anal = new AnalysisPipeline(g);
+		anal.process();
+
+		//if ( generate_DFA_dot ) generateDFAs(g);
+
+		if ( g.tool.getNumErrors()>prevErrors ) return;
+
+		// GENERATE CODE
+		if ( gencode ) {
+			var gen = new CodeGenPipeline(g);
+			gen.process();
+		}
 	},
 	checkForRuleIssues:function(g) {
 		// check for redefined rules
@@ -576,7 +891,11 @@ RuleCollector.prototype={
 						AST.getAllChildrenWithType(node, ANTLRParser.AT), block);
 					
 				}else if(AST.isType(node.children[1], 'TOKEN_REF')){
-					self.discoverLexerRule(node, ID, block);
+					var modiNode = AST.getFirstChildWithType(node, ANTLRParser.RULEMODIFIERS);
+					if(modiNode && modi.children){
+						var modi = modiNode.children[0];
+					}
+					self.discoverLexerRule(node, ID, modi, block);
 					
 				}
 				var l = block.children ? block.children.length: 0;
@@ -613,10 +932,11 @@ RuleCollector.prototype={
 			this.altLabelToRuleName.put(Utils.decapitalize(altLabel), currentRuleName);
 		}
 	},
-	discoverLexerRule:function(rule, ID,block){
+	discoverLexerRule:function(rule, ID,modifiers, block){
 		var numAlts = block.children == null? 0: block.children.length;
 		var r = new Rule(this.g, ID.text, rule, numAlts);
 		r.mode = this.currentModeName;
+		if ( modifiers.length != 0 ) r.modifiers = modifiers;
 		this.rules.put(r.name, r);
 	}
 };
@@ -665,6 +985,13 @@ Rule.prototype={
 		}
 		if ( labels.length == 0 ) return null;
 		return labels;
+	},
+	isFragment:function() {
+		if ( this.modifiers==null ) return false;
+		this.modifiers.some(function(a){
+			return  a.type =="FRAGMENT"|| ANTLRParser.FRAGMENT ;
+		}, this);
+		return false;
 	}
 };
 function Alternative(r, altNum) {
@@ -676,6 +1003,8 @@ function Alternative(r, altNum) {
 
 function SymbolCollector(g){
 	this.g = g;
+	this.rulerefs = [];
+	this.qualifiedRulerefs = [];
 	this.namedActions = [];
 	this.terminals = [];
 	this.tokenIDRefs = [];
@@ -1003,29 +1332,140 @@ SemanticPipeline.prototype={
 				r.alt[i].ast.alt = r.alt[i];
 			}
 		}, this);
-		/*
+		
 		// ASSIGN TOKEN TYPES
-		g.importTokensFromTokensFile();
-		if ( g.isLexer() ) {
-			assignLexerTokenTypes(g, collector.tokensDefs);
+		this.g.importTokensFromTokensFile();
+		if ( this.g.isLexer() ) {
+			this.assignLexerTokenTypes(this.g, collector.tokensDefs);
 		}
 		else {
-			assignTokenTypes(g, collector.tokensDefs,
+			this.assignTokenTypes(this.g, collector.tokensDefs,
 							 collector.tokenIDRefs, collector.terminals);
 		}
-
+		
 		// CHECK RULE REFS NOW (that we've defined rules in grammar)
-		symcheck.checkRuleArgs(g, collector.rulerefs);
-		identifyStartRules(collector);
-		symcheck.checkForQualifiedRuleIssues(g, collector.qualifiedRulerefs);
+		//symcheck.checkRuleArgs(this.g, collector.rulerefs);
+		this.identifyStartRules(collector);
+		//symcheck.checkForQualifiedRuleIssues(g, collector.qualifiedRulerefs);
 
 		// don't continue if we got symbol errors
-		if ( g.tool.getNumErrors()>0 ) return;
+		if ( this.g.tool.getNumErrors()>0 ) return;
 
 		// CHECK ATTRIBUTE EXPRESSIONS FOR SEMANTIC VALIDITY
-		AttributeChecks.checkAllAttributeExpressions(g);
+		//AttributeChecks.checkAllAttributeExpressions(this.g);
 
-		UseDefAnalyzer.trackTokenRuleRefsInActions(g); */
+		//UseDefAnalyzer.trackTokenRuleRefsInActions(this.g);
+	},
+	identifyStartRules:function(collector) {
+		collector.rulerefs.forEach(function(ref){
+			var ruleName = ref.text;
+			var r = this.g.getRule(ruleName);
+			if ( r!=null ) r.isStartRule = false;
+		}, this);
+	},
+	assignLexerTokenTypes:function(g, tokensDefs) {
+		var G = this.g.getOutermostGrammar(); // put in root, even if imported
+		tokensDefs.forEach(function(def){
+			// tokens { id (',' id)* } so must check IDs not TOKEN_REF
+			if ( Grammar.isTokenName(def.text) ) {
+				G.defineTokenName(def.text);
+			}
+		},this);
+
+		/* Define token types for nonfragment rules which do not include a 'type(...)'
+		 * or 'more' lexer command.
+		 */
+		//for (Rule r : g.rules.values()) {
+		this.g.rules.values().forEach(function(r){
+			if ( !r.isFragment() && !this.hasTypeOrMoreCommand(r) ) {
+				G.defineTokenName(r.name);
+			}
+		}, this);
+
+		// FOR ALL X : 'xxx'; RULES, DEFINE 'xxx' AS TYPE X
+		var litAliases =
+			Grammar.getStringLiteralAliasesFromLexerRules(g.ast);
+		var conflictingLiterals = {};
+		if ( litAliases!=null ) {
+			for(var i=0,l=litAliases.length; i<l; i++){
+				var pair = litAliases[i];
+				var nameAST = pair.a;
+				var litAST = pair.b;
+				if ( !G.stringLiteralToTypeMap.containsKey(litAST.text) ) {
+					G.defineTokenAlias(nameAST.text, litAST.text);
+				}
+				else {
+					// oops two literal defs in two rules (within or across modes).
+					conflictingLiterals[litAST.text] = true;
+				}
+			}
+			for (var lit in conflictingLiterals) {
+				// Remove literal if repeated across rules so it's not
+				// found by parser grammar.
+				G.stringLiteralToTypeMap.remove(lit);
+			}
+		}
+
+	},
+	hasTypeOrMoreCommand:function(r) {
+		var ast = r.ast;
+		if (ast == null) {
+			return false;
+		}
+
+		var altActionAst = AST.getFirstDescendantWithType(ast, ANTLRParser.LEXER_ALT_ACTION);
+		if (altActionAst == null) {
+			// the rule isn't followed by any commands
+			return false;
+		}
+
+		if(altActionAst.children == null) return false;
+		// first child is the alt itself, subsequent are the actions
+		for (var i = 1,l=altActionAst.children.length; i < l; i++) {
+			var node = altActionAst.children[i];
+			if (AST.isType(node, ANTLRParser.LEXER_ACTION_CALL)) {
+				if ("type" == node.children[0].text) {
+					return true;
+				}
+			}
+			else if ("more"== node.text) {
+				return true;
+			}
+		}
+
+		return false;
+	},
+	assignTokenTypes:function( g, tokensDefs, tokenIDs, terminals){
+		tokensDefs.forEach(function(alias){
+			if (g.getTokenType(alias.text) != Token.INVALID_TYPE) {
+				g.tool.errMgr.grammarError('TOKEN_NAME_REASSIGNMENT', g.fileName, alias.token, alias.text);
+			}
+
+			g.defineTokenName(alias.text);
+		}, this);
+
+		// DEFINE TOKEN TYPES FOR TOKEN REFS LIKE ID, INT
+		tokenIDs.forEach(function(idAST){
+			if (g.getTokenType(idAST.text) == Token.INVALID_TYPE) {
+				g.tool.errMgr.grammarError('IMPLICIT_TOKEN_DEFINITION', g.fileName, idAST.token, idAST.text);
+			}
+
+			g.defineTokenName(idAST.text);
+		}, this);
+
+		// VERIFY TOKEN TYPES FOR STRING LITERAL REFS LIKE 'while', ';'
+		terminals.forEach(function(termAST){
+			if (!AST.isType(termAST, ANTLRParser.STRING_LITERAL)) {
+				return;
+			}
+
+			if (g.getTokenType(termAST.text) == Token.INVALID_TYPE) {
+				g.tool.errMgr.grammarError('IMPLICIT_STRING_DEFINITION', g.fileName, termAST.token, termAST.text);
+			}
+		}, this);
+
+		g.tool.log("semantics", "tokens="+g.tokenNameToTypeMap);
+        g.tool.log("semantics", "strings="+g.stringLiteralToTypeMap);
 	}
 };
 
