@@ -46,9 +46,9 @@ AST={
 		while(work.length >0){
 			var node = work.shift();
 				node._uuid = UUID_COUNT++;
-			if ( node.children!=null ) {
-				for(var i=0,l=node.children.length; i<l; i++){
-					var c = node.children[i];
+			if ( node.chr!=null ) {
+				for(var i=0,l=node.chr.length; i<l; i++){
+					var c = node.chr[i];
 					c.parent = node;
 					work.push(c);
 				}
@@ -57,8 +57,8 @@ AST={
 		return json;
 	},
 	getFirstChildWithType:function(tree, type){
-		for(var i=0,l=tree.children.length;i<l;i++){
-			var ch = tree.children[i];
+		for(var i=0,l=tree.chr.length;i<l;i++){
+			var ch = tree.chr[i];
 			if(ch.type === type || ch.type == ANTLRParser[type]){
 				return ch;
 			}
@@ -67,8 +67,8 @@ AST={
 	},
 	getAllChildrenWithType:function(tree, type){
 		var nodes = [];
-		for(var i=0,l=tree.children.length;i<l;i++){
-			var ch = tree.children[i];
+		for(var i=0,l=tree.chr.length;i<l;i++){
+			var ch = tree.chr[i];
 			if(ch.type === type || ch.type == ANTLRParser[type]){
 				nodes.push(ch);
 			}
@@ -86,10 +86,10 @@ AST={
 		this.line = 0;
 	},
 	addChild:function(tree, c){
-		if(tree.children)
-			tree.children.push(c);
+		if(tree.chr)
+			tree.chr.push(c);
 		else
-			tree.children = [c];
+			tree.chr = [c];
 	},
 	getNodesWithType:function(tree, types) {
 		if(typeof(types) == 'number')
@@ -102,8 +102,8 @@ AST={
 		while ( work.length > 0 ) {
 			t = work.shift();
 			if ( types.contains(AST.type(t))) nodes.push(t);
-			if ( t.children!=null ) {
-				t.children.forEach(function(tch){
+			if ( t.chr!=null ) {
+				t.chr.forEach(function(tch){
 						work.push(tch);
 				});
 			}
@@ -139,9 +139,9 @@ AST={
 			var p = node.parent;
 			//delete node.parent;
 			callback(node, type, p);
-			if ( node.children ==null ) return;
-			for(var i=0,l=node.children.length; i<l; i++){
-				var c = node.children[i];
+			if ( node.chr ==null ) return;
+			for(var i=0,l=node.chr.length; i<l; i++){
+				var c = node.chr[i];
 					if(c.parent == null)
 						c.parent = node;
 					work.push(c);
@@ -170,16 +170,16 @@ AST={
 		return true;
 	},
 	getChildCount:function(tree){
-		if(tree.children)
-			return tree.children.length;
+		if(tree.chr)
+			return tree.chr.length;
 		else
 			return 0;
 	},
 	getFirstDescendantWithType:function(tree, type){
 		if ( AST.isType(tree, type) ) return this;
-        if ( tree.children==null ) return null;
-        for (var i=0,l=tree.children.length;i<l; i++) {
-        	var t = tree.children[i];
+        if ( tree.chr==null ) return null;
+        for (var i=0,l=tree.chr.length;i<l; i++) {
+        	var t = tree.chr[i];
             
             if ( AST.isType(t, type) ) return t;
             var d = AST.getFirstDescendantWithType(t, type);
@@ -415,7 +415,7 @@ return TreePatternLexer;
 function Grammar(tool, ast){
 	this.tool = tool;
 	this.ast = ast;
-	this.name = ast.children[0].text;
+	this.name = ast.chr[0].text;
 	this.tokenNameToTypeMap = new LinkedHashMap();
 	this.typeToTokenList = [];
 	this.rules = new OrderedHashMap();
@@ -437,35 +437,35 @@ Grammar.getStringLiteralAliasesFromLexerRules=function(ast){
 	var ruleNodes = AST.getNodesWithType(ast, ANTLRParser.RULE);
 	if ( ruleNodes==null || ruleNodes.length == 0 ) return null;
 	ruleNodes.forEach(function(r){
-		var name = r.children[0];
-		if(AST.isType(name, ANTLRParser.TOKEN_REF) && AST.isType(r.children[1], ANTLRParser.BLOCK)){
-			var block = r.children[1];
-			if(block.children.length != 1) return;
-			if(block.children[0].length != 1) return;
+		var name = r.chr[0];
+		if(AST.isType(name, ANTLRParser.TOKEN_REF) && AST.isType(r.chr[1], ANTLRParser.BLOCK)){
+			var block = r.chr[1];
+			if(block.chr.length != 1) return;
+			if(block.chr[0].length != 1) return;
 			
-			switch(AST.type(block.children[0].type)){
+			switch(AST.type(block.chr[0].type)){
 			case ANTLRParser.ALT:
-				var alt = block.children[0];
-				if(!AST.isType(alt.children[0], 'STRING_LITERAL'))
+				var alt = block.chr[0];
+				if(!AST.isType(alt.chr[0], 'STRING_LITERAL'))
 					return;
-				if(alt.children.length == 1){
-					lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
-				}else if(alt.children.length == 2){
-					var t = AST.type(alt.children[1].type);
+				if(alt.chr.length == 1){
+					lexerRuleToStringLiteral.push({a:name, b:alt.chr[0]});
+				}else if(alt.chr.length == 2){
+					var t = AST.type(alt.chr[1].type);
 					if(t == ANTLRParser.ACTION || t == ANTLRParser.SEMPRED){
-						lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
+						lexerRuleToStringLiteral.push({a:name, b:alt.chr[0]});
 					}
 				}
 				break;
 			case ANTLRParser.LEXER_ALT_ACTION:
-				if(block.children[0].length > 3 || block.children[0].length < 1)
+				if(block.chr[0].length > 3 || block.chr[0].length < 1)
 					break;
-				var alt = block.children[0].children[0];
+				var alt = block.chr[0].chr[0];
 				if(!AST.isType(alt, ANTLRParser.ALT)) break;
-				if(alt.children.length != 1 ||
-					!AST.isType(alt.children[0].type, ANTLRParser.STRING_LITERAL))
+				if(alt.chr.length != 1 ||
+					!AST.isType(alt.chr[0].type, ANTLRParser.STRING_LITERAL))
 					break;
-				lexerRuleToStringLiteral.push({a:name, b:alt.children[0]});
+				lexerRuleToStringLiteral.push({a:name, b:alt.chr[0]});
 				break;
 			default:
 				break;
@@ -518,15 +518,15 @@ Grammar.prototype={
     },
     defineAction:function(atAST) {
         if ( AST.getChildCount(atAST)==2 ) {
-            var name = atAST.children[0].text;
-            this.namedActions[name] = atAST.children[1];
+            var name = atAST.chr[0].text;
+            this.namedActions[name] = atAST.chr[1];
         }
         else {
-			var scope = atAST.children[0].text;
+			var scope = atAST.chr[0].text;
             var gtype = this.getTypeString();
             if ( scope == gtype || (scope == "parser") &&gtype =="combined"){
-				var name = atAST.children[1].text;
-				this.namedActions[name] = atAST.children[2];
+				var name = atAST.chr[1].text;
+				this.namedActions[name] = atAST.chr[2];
 			}
         }
     },
@@ -764,11 +764,11 @@ Tool.prototype={
 		var redefinition = false;
 		var ruleToAST = {};
 		rules.forEach(function(ruleAST){
-			var ID = ruleAST.children[0];
+			var ID = ruleAST.chr[0];
 			var ruleName = ID.text;
 			var prev = ruleToAST[ruleName];
 			if ( prev !=null ) {
-				var prevChild = prev.children[0];
+				var prevChild = prev.chr[0];
 				g.tool.errMgr.grammarError('RULE_REDEFINITION',
 										   g.fileName,
 										   AST.token(ID),
@@ -830,7 +830,7 @@ GrammarTransformPipeline.prototype={
 	},
 	integrateImportedGrammars:function(rootGrammar){
 		var root = rootGrammar.ast;
-		var id = root.children[0];
+		var id = root.chr[0];
 		//GrammarASTAdaptor adaptor = new GrammarASTAdaptor(id.token.getInputStream());
 
 	 	var tokensRoot = AST.getFirstChildWithType(root, 'TOKENS_SPEC');
@@ -849,7 +849,7 @@ GrammarTransformPipeline.prototype={
 			// make list of rules we have in root grammar
 			var rootRules = AST.getNodesWithType(RULES,'RULE');
 			rootRules.forEach(function(r){
-					rootRuleNames[r.children[0].text] = true;
+					rootRuleNames[r.chr[0].text] = true;
 			});
 		}
 	}
@@ -862,13 +862,13 @@ LeftRecursiveRuleAnalyzer.hasImmediateRecursiveRuleRefs = function(t, ruleName) 
 	if ( t==null ) return false;
 	var blk = AST.getFirstChildWithType(t, ANTLRParser.BLOCK);
 	if ( blk==null ) return false;
-	var n = blk.children ==null? 0: blk.children.length;
+	var n = blk.chr ==null? 0: blk.chr.length;
 	for (var i = 0; i < n; i++) {
-		var alt = blk.children[i];
-		var first = alt.children[0];
+		var alt = blk.chr[i];
+		var first = alt.chr[0];
 		if ( first==null ) continue;
 		if ( AST.type(first) == ANTLRParser.RULE_REF && first.text === ruleName ) return true;
-		var rref = first.children[1];
+		var rref = first.chr[1];
 		if ( rref!=null && AST.isType(rref,ANTLRParser.RULE_REF) && rref.text === ruleName ) return true;
 	}
 	return false;
@@ -886,26 +886,26 @@ RuleCollector.prototype={
 		AST.visit(ast, function(node, type){
 			if(type == ANTLRParser.RULE){
 				var block = AST.getFirstChildWithType(node, ANTLRParser.BLOCK);
-				if(AST.isType(node.children[1], 'RULE_REF')){
-					self.discoverRule(node, node.children[0], 
+				if(AST.isType(node.chr[1], 'RULE_REF')){
+					self.discoverRule(node, node.chr[0], 
 						AST.getAllChildrenWithType(node, ANTLRParser.AT), block);
 					
-				}else if(AST.isType(node.children[1], 'TOKEN_REF')){
+				}else if(AST.isType(node.chr[1], 'TOKEN_REF')){
 					var modiNode = AST.getFirstChildWithType(node, ANTLRParser.RULEMODIFIERS);
-					if(modiNode && modi.children){
-						var modi = modiNode.children[0];
+					if(modiNode && modi.chr){
+						var modi = modiNode.chr[0];
 					}
 					self.discoverLexerRule(node, ID, modi, block);
 					
 				}
-				var l = block.children ? block.children.length: 0;
+				var l = block.chr ? block.chr.length: 0;
 				for(var i=0; i<l; i++)
-					self.discoverOuterAlt(block.children[i]);//LEXER_ALT_ACTION | ALT
+					self.discoverOuterAlt(block.chr[i]);//LEXER_ALT_ACTION | ALT
 			}
 		});
 	},
 	discoverRule:function(rule, ID, actions, block){
-		var numAlts = block.children == null? 0: block.children.length;
+		var numAlts = block.chr == null? 0: block.chr.length;
 		var r = null;
 		if ( LeftRecursiveRuleAnalyzer.hasImmediateRecursiveRuleRefs(rule, ID.text) ) {
 			//r = new LeftRecursiveRule(g, ID.text, rule);
@@ -919,8 +919,8 @@ RuleCollector.prototype={
 
 		actions.forEach(function(a){
 			// a = ^(AT ID ACTION)
-			var action =  a.children[1];
-			r.namedActions[a.children[0].text] = action;
+			var action =  a.chr[1];
+			r.namedActions[a.chr[0].text] = action;
 			action.resolver = r;
 		});
 	},
@@ -933,7 +933,7 @@ RuleCollector.prototype={
 		}
 	},
 	discoverLexerRule:function(rule, ID,modifiers, block){
-		var numAlts = block.children == null? 0: block.children.length;
+		var numAlts = block.chr == null? 0: block.chr.length;
 		var r = new Rule(this.g, ID.text, rule, numAlts);
 		r.mode = this.currentModeName;
 		if ( modifiers.length != 0 ) r.modifiers = modifiers;
@@ -1022,34 +1022,34 @@ SymbolCollector.prototype ={
 					var actions = AST.getAllChildrenWithType(node,'AT');
 					actions.forEach(function(action){
 							var sc, name, ACTION;
-							if(action.children.length == 3){
-								this.globalNamedAction(action.children[0],
-									action.children[1], action.children[2]);
+							if(action.chr.length == 3){
+								this.globalNamedAction(action.chr[0],
+									action.chr[1], action.chr[2]);
 							}else{
 								this.globalNamedAction(null,
-									action.children[1], action.children[2]);
+									action.chr[1], action.chr[2]);
 							}
 							
 					}, self);
 					break;
 					
 				case ANTLRParser.TOKENS_SPEC:
-					node.children.forEach(function(id){
+					node.chr.forEach(function(id){
 							this.defineToken(id);
 					}, self);
 					break;
 					
 				case ANTLRParser.RULE:
-					//if(AST.isType(node.children[1], 'RULE_REF')){
-					self.discoverRule(node.children[0]);
+					//if(AST.isType(node.chr[1], 'RULE_REF')){
+					self.discoverRule(node.chr[0]);
 					var block = AST.getFirstChildWithType(node, ANTLRParser.BLOCK);
-					var l = block.children ? block.children.length: 0;
+					var l = block.chr ? block.chr.length: 0;
 					for(var i=0; i<l; i++)
-						self.discoverOuterAlt(block.children[i]);
+						self.discoverOuterAlt(block.chr[i]);
 					//}
 					break;
 				case ANTLRParser.RULE_REF:
-					var ch = node.children;
+					var ch = node.chr;
 					if(ch != null && ch.length > 0 && AST.isType(ch[0],'ARG_ACTION'))
 						self.actionInAlt(ch[0]);
 					break;
@@ -1066,7 +1066,7 @@ SymbolCollector.prototype ={
 				case ANTLRParser.PLUS_ASSIGN:
 					if(AST.isType(parent, 'ALT') || AST.isType(parent, 'ASSIGN') &&
 						!self.g.isLexer()){
-						self.label(node, node.children[0], node.children[1]);
+						self.label(node, node.chr[0], node.chr[1]);
 					}
 					break;
 				case ANTLRParser.STRING_LITERAL:
@@ -1202,13 +1202,13 @@ SymbolChecks.prototype={
 		var name;
 		var nameNode;
 		actions.forEach(function(ampersandAST){
-			nameNode = ampersandAST.children[0];
+			nameNode = ampersandAST.chr[0];
 			if ( AST.getChildCount(ampersandAST)==2 ) {
 				name = nameNode.text;
 			}
 			else {
 				scope = nameNode.text;
-                name = ampersandAST.children[1].text;
+                name = ampersandAST.chr[1].text;
             }
             var scopeActions = this.actionScopeToActionNames[scope];
             if ( scopeActions==null ) { // init scope
@@ -1419,12 +1419,12 @@ SemanticPipeline.prototype={
 			return false;
 		}
 
-		if(altActionAst.children == null) return false;
+		if(altActionAst.chr == null) return false;
 		// first child is the alt itself, subsequent are the actions
-		for (var i = 1,l=altActionAst.children.length; i < l; i++) {
-			var node = altActionAst.children[i];
+		for (var i = 1,l=altActionAst.chr.length; i < l; i++) {
+			var node = altActionAst.chr[i];
 			if (AST.isType(node, ANTLRParser.LEXER_ACTION_CALL)) {
-				if ("type" == node.children[0].text) {
+				if ("type" == node.chr[0].text) {
 					return true;
 				}
 			}

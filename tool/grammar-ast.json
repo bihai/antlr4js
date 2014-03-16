@@ -1,17 +1,17 @@
 [
 	{
 		grammarType:'PARSER',
-		type:'PARSER_GRAMMAR',
+		type:'GRAMMAR',
 		fileName:'grammar-ast.json',
-		children:[
+		chr:[
 			{
-				text:'jsAntlrParser',
+				text:'antlr4js',
 				type:'ID'
 			},
 			
 			{
 				type:'RULES',
-				children:[
+				chr:[
 					{
 						type:'RULE_REF',
 						text:'rule01',
@@ -24,13 +24,40 @@
 	},
 	{
 		grammarType:'LEXER',
-		type:'LEXER_GRAMMAR',
+		type:'GRAMMAR',
 		fileName:'grammar-ast.json',
-		children:[
-			{	type:'RULES',
-				children:[
-				]
-			}
-		]
+		chr:[
+		{
+		  type:'ID',
+		  text:'antlr4js'
+		},
+		{
+		  type:'TOKENS_SPEC',
+		  chr:[
+		  	{ type:'ID',text:'SEMPRED' },
+		  	{ type:'ID',text:'TOKEN_REF' },
+		  	{ type:'ID',text:'RULE_REF' },
+		  	{ type:'ID',text:'LEXER_CHAR_SET' },
+		  	{ type:'ID',text:'ARG_ACTION' }
+		  ]
+		},
+		{
+		  type:'RULES',
+		  chr:[
+		  	  {	
+		  	  	  type:'RULE',
+		  	  	  chr:[
+		  	  	  	  { type:'TOKEN_REF', text:'WS'
+		  	  	  	  },
+		  	  	  	  {	type:'BLOCK',
+		  	  	  	  	  chr:[
+		  	  	  	  	  	  
+		  	  	  	  	  ]
+		  	  	  	  }
+		  	  	  ]
+		  	  }
+		  ]
+		}
+    ]
 	}
 ]

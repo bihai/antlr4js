@@ -1,0 +1,66 @@
+lexer grammar antlr4js;
+
+tokens { SEMPRED; TOKEN_REF; RULE_REF; LEXER_CHAR_SET; ARG_ACTION; }
+//liujing
+COMMENT :
+	 '/' ( '/' | '*' );
+	 
+OPTIONS      : 'options' WSNLCHARS* '{'  ;
+TOKENS_SPEC  : 'tokens'  WSNLCHARS* '{'  ;
+
+IMPORT       : 'import'               ;
+FRAGMENT     : 'fragment'             ;
+LEXER        : 'lexer'                ;
+PARSER       : 'parser'               ;
+GRAMMAR      : 'grammar'              ;
+TREE_GRAMMAR : 'tree' WSNLCHARS* 'grammar' ;
+PROTECTED    : 'protected'            ;
+PUBLIC       : 'public'               ;
+PRIVATE      : 'private'              ;
+RETURNS      : 'returns'              ;
+LOCALS       : 'locals'               ;
+THROWS       : 'throws'               ;
+CATCH        : 'catch'                ;
+FINALLY      : 'finally'              ;
+MODE         : 'mode'                 ;
+
+
+fragment
+HEX_DIGIT : ('0'..'9'|'a'..'f'|'A'..'F') ;
+fragment
+UNICODE_ESC
+:   'u' // Leadin for unicode escape sequence
+
+        // We now require 4 hex digits. Note though
+        // that we accept any number of characters
+        // and issue an error if we do not get 4. We cannot
+        // use an inifinite count such as + because this
+        // might consume too many, so we lay out the lexical
+        // options and issue an error at the invalid paths.
+        //
+    	(
+    	   (
+    	      HEX_DIGIT  
+    	        (
+    	             HEX_DIGIT  
+    		         (
+    		              HEX_DIGIT  
+    		              (
+    		                  // Four valid hex digits, we are good
+    		                  //
+    		                  HEX_DIGIT
+
+    		                | // Three valid digits
+    		              )
+
+    		            | // Two valid digits
+    		          )
+
+    		        | // One valid digit
+    		    )
+            )
+          | // No valid hex digits at all
+    	)
+
+    ;
+ 

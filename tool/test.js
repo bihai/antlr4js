@@ -5,12 +5,28 @@ var assert = require('assert');
 var tool = new Tool('grammar-ast.json');
 var res = tool._file2Ast(['grammar-ast.json']);
 var misc = require('./misc.js');
+var fs = require('fs');
 
 console.log('-------------------');
 //console.log(util.inspect(res));
 
 (function(){
+		
 	console.log('Unit Test starts');
+	console.log('tool parser test');
+	var grmContent = fs.readFileSync('test-parser-grammar.json', {encoding:'utf-8'});
+	var tp = require('./tool-parser.js');
+	/*tp.init(grmContent);
+	var token = tp.nextToken();
+	 while(token != tp.EOF){
+		console.log("token:"+ util.inspect(token));
+		token = tp.nextToken();
+	} */
+	var parsedAst = tp.createAST(grmContent);
+	console.log(JSON.stringify(parsedAst, null,'  '));
+	
+	console.log('BitSet test');
+	
 	debugger;
 	var bitset = misc.BitSet.of(5, 109);
 	assert(bitset.member(109), 'BitSet member() test failed');
@@ -31,20 +47,20 @@ console.log('-------------------');
 	
 	var tree = {
 		type:'A',
-		children:[
+		chr:[
 			{
 				type:'B',
-				children:[ {type:'C'}
+				chr:[ {type:'C'}
 				]
 			}
 		]
 	};
 	AST.processRaw(tree);
 
-	assert(AST.isType(tree.children[0].children[0], 'C'), 'AST.isType test failed');
-	assert(AST.isPath(tree.children[0].children[0], 'B','C'), 'AST.isPath (1) test failed');
-	assert(AST.isPath(tree.children[0].children[0], 'A', 'B','C'), 'AST.isPath (2) test failed');
-	assert(AST.isPath(tree.children[0].children[0], 'A', '~x','C'), 'AST.isPath (3) test failed');
-	//assert.notEqual(AST.isPath(tree.children[0].children[0], 'A', 'B','C'), 'AST.isPath (3) test failed');
+	assert(AST.isType(tree.chr[0].chr[0], 'C'), 'AST.isType test failed');
+	assert(AST.isPath(tree.chr[0].chr[0], 'B','C'), 'AST.isPath (1) test failed');
+	assert(AST.isPath(tree.chr[0].chr[0], 'A', 'B','C'), 'AST.isPath (2) test failed');
+	assert(AST.isPath(tree.chr[0].chr[0], 'A', '~x','C'), 'AST.isPath (3) test failed');
+	//assert.notEqual(AST.isPath(tree.chr[0].chr[0], 'A', 'B','C'), 'AST.isPath (3) test failed');
 	console.log('Unit Test is over');
 })();
