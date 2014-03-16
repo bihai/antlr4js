@@ -314,6 +314,9 @@ function consume(){
 function lt(n, type){
 	if(n == undefined)
 		n = 1;
+	if(type != undefined){
+	    return isLT(n, type);
+	}
 	var idx = n-1;
 	while(idx >= _tokenBuf.length){
 		_tokenBuf.push(nextToken());
@@ -388,9 +391,10 @@ function prequelConstruct(){
 		throw mismatch(['tokens','@']);
 }
 function rules(){
-	while(lt(1) != MODE && lt(1) != EOF){
+	while(lt(1, 'MODE') && lt(1, EOF)){
 		match('RULE_REF'); match(COLON);
 	}
+	return {type:'RULES', chr:[]};
 }
 function tokensSpec(){
 	match('TOKENS_SPEC');
