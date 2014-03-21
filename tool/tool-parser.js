@@ -54,10 +54,35 @@ var _litMap={
 	'throws':   'THROWS'             ,
 	'catch':    'CATCH'              ,
 	'finally':  'FINALLY'            ,
-	'mode':     'MODE'               
+	'mode':     'MODE'               ,
+	
+	 ':'	:	  'COLON'			,
+	 '::'	:     'COLONCOLON'    ,
+	 ','    :     'COMMA'         ,
+	 ';'    :     'SEMI'          ,
+	 '('    :     'LPAREN'        ,
+	 ')'    :     'RPAREN'        ,
+	 '->'   :     'RARROW'        ,
+	 '<'    :     'LT'            ,
+	 '>'    :     'GT'            ,
+	 '='    :     'ASSIGN'        ,
+	 '?'    :     'QUESTION'      ,
+	 '=>'   :     'SYNPRED'       ,
+	 '*'    :     'STAR'          ,
+	 '+'    :     'PLUS'          ,
+	 '+='   :     'PLUS_ASSIGN'   ,
+	 '|'    :     'OR'            ,
+	 '$'    :     'DOLLAR'        ,
+	 '.'    :     'DOT'           ,
+	 '..'   :     'RANGE'         ,
+	 '@'    :     'AT'            ,
+	 '#'    :     'POUND'         ,
+	 '~'    :     'NOT'           ,
+	 '}'    :     'RBRACE'        ,
+	 '{'	:	'LBRACE'
 };
 
-var COLON = ':', 
+var COLON =    ':'		, 
 COLONCOLON   = '::'                   ,
 COMMA        = ','                    ,
 SEMI 		  = ';'		,
@@ -74,12 +99,13 @@ PLUS         = '+'                    ,
 PLUS_ASSIGN  = '+='                   ,
 OR           = '|'                    ,
 DOLLAR       = '$'                    ,
-DOT		     = '.'                    , // can be WILDCARD or DOT in qid or imported rule ref
+DOT		     = '.'                    , 
 RANGE        = '..'                   ,
 AT           = '@'                    ,
 POUND        = '#'                    ,
 NOT          = '~'                    ,
 RBRACE       = '}'                    ;
+LBRACE = '{';
 
 var ID = 'ID';
 
@@ -174,7 +200,7 @@ function nextToken(){
 		case '}'  :
 		case '{'  :
 			consumeChar();
-			tk = ch; break;
+			tk = {type:_litMap[ch], text:ch}; break;
 		case ' '	:
 		case '\t'   :
 		case '\r'   :
@@ -186,25 +212,25 @@ function nextToken(){
 			//break;
 		case '+'  :
 			if(LA(2) == '='){
-				tk = '+=';
+				tk = {type:_litMap['+='], text:'+='};
 				consumeChar();consumeChar();
 			}else{
-				tk = ch;
+				tk = {type:_litMap[ch], text:ch};
 				consumeChar();
 			}
 			break;
 		case '.'  :
 			if(LA(2) == '.'){
-				tk = '..';
+				tk = {type:_litMap['..'], text:'..'};
 				consumeChar();consumeChar();
 			}else{
-				tk = ch;
+				tk = {type:_litMap[ch], text:ch};
 				consumeChar();
 			}
 			break;
 		case '-' :
 			if(LA(2) == '>'){
-				tk = '->';
+				tk = {type:_litMap['->'], text:'->'};
 				consumeChar();consumeChar();
 			}else{
 				throw mischar('-');
@@ -212,19 +238,19 @@ function nextToken(){
 			break;
 		case '='  :
 			if(LA(2) == '>'){
-				tk = '=>';
+				tk = {type:_litMap['=>'], text:'=>'};
 				consumeChar();consumeChar();
 			}else{
-				tk = ch;
+				tk = {type:_litMap[ch], text:ch};
 				consumeChar();
 			}
 			break;
 		case ':'  :
 			if(LA(2) == ':'){
-				tk = '::';
+				tk = {type:_litMap['::'], text:'::'};
 				consumeChar();consumeChar();
 			}else{
-				tk = ch;
+				tk = {type:_litMap[ch], text:ch};
 				consumeChar();
 			}
 			break;
@@ -254,6 +280,9 @@ function nextToken(){
 			throw mischar(ch);
 		}
 		break;
+	}
+	if(tk != EOF && tk.type == null){
+		throw mischar(tk.text);
 	}
 	return tk;
 }
@@ -346,7 +375,7 @@ function grammar(){
 		g.chr = [];
 	var _id = id();
 		g.chr.push(_id);
-	match(';');
+	match(_litMap[';']);
 	while(isLT(1,'TOKENS_SPEC') || isLT(1, 'AT'))
 		g.chr.push(prequelConstruct());
 	rules();
@@ -385,32 +414,49 @@ function id(){
 function prequelConstruct(){
 	if(lt(1).type == 'TOKENS_SPEC')
 		return tokensSpec();
-	else if(lt(1).type == AT)
+	else if(lt(1).type == 'AT')
 		return action();
 	else
 		throw mismatch(['tokens','@']);
 }
 function rules(){
-	while(lt(1, 'MODE') && lt(1, EOF)){
-		match('RULE_REF'); match(COLON);
+	var children = [];
+	while(!lt(1, 'MODE') && !lt(1, EOF)){
+		if(lt(1, 'RULE_REF'))
+			children.push(parserRule());
+		else if(lt(1, 'TOKEN_REF'))
+			children.push(lexerRule());
+		else
+			throw mismatch('RULE_REF','TOKEN_REF');
 	}
-	return {type:'RULES', chr:[]};
+	return {type:'RULES', chr:children};
+}
+function parserRule(){
+	
+	match('RULE_REF'); match('COLON');
+}
+function lexerRule(){
+	match('TOKEN_REF'); match('COLON');
+	lexerRuleBlock(); match('SEMI');
+}
+function lexerRuleBlock(){
+	
 }
 function tokensSpec(){
 	match('TOKENS_SPEC');
-	match('{');
+	match(_litMap['{']);
 	var ids = [];
 	if(isLT(1, 'TOKEN_REF') || isLT(1, 'RULE_REF') ){
 		ids.push(id());
-		while(isLT(1, COMMA)){
+		while(isLT(1, 'COMMA')){
 			consume();
 			ids.push(id());
 		}
-		if(isLT(1, ';')){
+		if(isLT(1, _litMap[';'])){
 			consume();
 			while(isLT(1, 'TOKEN_REF') || isLT(1, 'RULE_REF')){
 				ids.push(id());
-				match(';');
+				match(_litMap[';']);
 			}
 		}
 	}

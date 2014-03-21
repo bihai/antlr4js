@@ -16,14 +16,14 @@ console.log('-------------------');
 	console.log('tool parser test');
 	var grmContent = fs.readFileSync('test-parser-grammar.json', {encoding:'utf-8'});
 	var tp = require('./tool-parser.js');
-	/*tp.init(grmContent);
+	tp.init(grmContent);
 	var token = tp.nextToken();
 	 while(token != tp.EOF){
 		console.log("token:"+ util.inspect(token));
 		token = tp.nextToken();
-	} */
-	var parsedAst = tp.createAST(grmContent);
-	console.log(JSON.stringify(parsedAst, null,'  '));
+	}
+	//var parsedAst = tp.createAST(grmContent);
+	//console.log(JSON.stringify(parsedAst, null,'  '));
 	
 	console.log('BitSet test');
 	
