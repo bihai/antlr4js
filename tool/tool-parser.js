@@ -184,7 +184,9 @@ function nextToken(){
 		switch(ch){
 		case EOF:
 			tk = EOF; break;
-		
+		case '[':
+			tk = pLEXER_CHAR_SET();
+			break;
 		case ';'  :
 		case '('  :
 		case ')'  :
@@ -331,6 +333,36 @@ function stringlit(startChar){
 	return {type:'STRING_LITERAL', text:text};
 }
 
+function pLEXER_CHAR_SET(){
+	var text = '';
+	text += consumeChar();
+	while(true){
+		var chr = LA();
+		if(chr == '\\'){
+			consumeChar();
+			chr = LA();
+			if(chr != '\n' && chr != '\r'){
+				text += '\\'+chr;
+				consumeChar();
+				continue;
+			}else{
+				throw mischar(chr);
+			}
+		}else if(chr == ']'){
+			text += ']';
+			consumeChar();
+			break;
+		}else if(chr == EOF){
+			throw mischar('<EOF>');
+		}else if(chr == '\n' || chr == '\r'){
+			throw mischar(chr);
+		}else{
+			text += chr;
+			consumeChar();
+		}
+	}
+	return {type:'LEXER_CHAR_SET', text:text};
+}
 //--parser-- starts
 var _tokenBuf = [];
 function consume(){
@@ -440,7 +472,100 @@ function lexerRule(){
 	lexerRuleBlock(); match('SEMI');
 }
 function lexerRuleBlock(){
-	
+	lexerAltList();
+	return {type:'BLOCK', chr:lexerAltList};
+}
+function lexerAltList(){
+	var list = [];
+	list.push(lexerAlt());
+	while(isLT(1, 'OR')){
+		consume();
+		list.push(lexerAlt());
+	}
+	return list;
+}
+function lexerAlt(){
+	if(is_lexerElement()){
+		var le = lexerElements();
+		if(is_lexerCommands()){
+			var lc = lexerCommands();
+			return {type:'LEXER_ALT_ACTION', chr:[le,lc]};
+		}
+		return le;
+	}
+	return {type:'ALT', chr:[{type:'EPSILON'}]};
+}
+function lexerElements(){
+	var les = [];
+	les.push(lexerElement());
+	while(is_lexerElement()){
+		les.push(lexerElement());
+	}
+	return {type:'ALT', chr: les};
+}
+function is_lexerElement(){
+	var tk = lt();
+	return tk.type in {TOKEN_REF:1, RULE_REF:1, STRING_LITERAL:1, NOT:1, DOT:1, LEXER_CHAR_SET:1};
+}
+function lexerElement(){
+	//labeledLexerElement | lexerAtom | lexerBlock | actionElement 
+	if(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF')){
+		if(lt(2, 'ASSIGN') || lt(2, 'PLUS_ASSIGN')){
+			var lbe = labeledLexerElement();
+			if(lt(1, 'QUESTION') || lt(1, 'START') || lt(1, 'PLUS')){
+				var bnf = ebnfSuffix();
+				bnf.chr = [{
+					type:'BLOCK',
+					chr:[ 
+						{
+							type: 'ALT',
+							chr:[ lbe ]
+						}
+					]}];
+				return bnf;
+			}else{
+				return lbe;
+			}
+		}
+	}
+	lexerAtom();
+	lexerBlock();
+	actionElement();
+}
+function labeledLexerElement(){
+	var _id = id();
+	var ass = consume();
+	if(lt(1, 'LPAREN'))
+		var l = lexerBlock();
+	else
+		var l = lexerAtom();
+	ass.chr = [_id, l];
+	return ass;
+}
+function is_lexerCommands(){
+}
+function lexerCommands(){}
+
+function ebnfSuffix(){
+	var t = lt(), nongreedy = null;
+	if(t.type == 'QUESTION'){
+		consume();
+		if(lt(1, 'QUESTION'))
+			nongreedy = consume();
+		return { type:'OPTIONAL', nongreedy:nongreedy};
+	}else if(t.type == 'STAR'){
+		consume();
+		if(lt(1, 'QUESTION'))
+			nongreedy = consume();
+		return { type:'CLOSURE', nongreedy:nongreedy};
+	}else if(t.type == 'PLUS'){
+		consume();
+		if(lt(1, 'QUESTION'))
+			nongreedy = consume();
+		return { type:'POSITIVE_CLOSURE', nongreedy:nongreedy};
+	}else{
+		throw mismatch([QUESTION, STAR, PLUS]);
+	}
 }
 function tokensSpec(){
 	match('TOKENS_SPEC');

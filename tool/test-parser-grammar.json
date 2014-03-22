@@ -4,7 +4,7 @@ tokens { SEMPRED; TOKEN_REF; RULE_REF; LEXER_CHAR_SET; ARG_ACTION; }
 //liujing
 COMMENT :
 	 '/' ( '/' | '*' );
-	 
+TestLexReg : [^abc\n] 'b';
 OPTIONS      : 'options' WSNLCHARS* '{'  ;
 TOKENS_SPEC  : 'tokens'  WSNLCHARS* '{'  ;
 
