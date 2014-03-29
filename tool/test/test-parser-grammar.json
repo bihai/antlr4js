@@ -1,6 +1,9 @@
 lexer grammar antlr4js;
 
 tokens { SEMPRED; TOKEN_REF; RULE_REF; LEXER_CHAR_SET; ARG_ACTION; }
+options {
+	k = 10;
+}
 //liujing
 COMMENT :
 	 '/' ( '/' | '*' );

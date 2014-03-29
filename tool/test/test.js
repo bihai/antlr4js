@@ -1,10 +1,10 @@
-var Tool = require('./tool.js');
+var Tool = require('../tool.js');
 var util = require('util');
 var assert = require('assert');
 
-var tool = new Tool('grammar-ast.json');
-var res = tool._file2Ast(['grammar-ast.json']);
-var misc = require('./misc.js');
+//var tool = new Tool('grammar-ast.json');
+//var res = tool._file2Ast(['grammar-ast.json']);
+var misc = require('../misc.js');
 var fs = require('fs');
 
 console.log('-------------------');
@@ -15,15 +15,19 @@ console.log('-------------------');
 	console.log('Unit Test starts');
 	console.log('tool parser test');
 	var grmContent = fs.readFileSync('test-parser-grammar.json', {encoding:'utf-8'});
-	var tp = require('./tool-parser.js');
-	tp.init(grmContent);
+	var createASTParser = require('../tool-parser.js');
+	var tp = createASTParser(grmContent);
 	var token = tp.nextToken();
 	 while(token != tp.EOF){
 		console.log("token:"+ util.inspect(token));
 		token = tp.nextToken();
 	}
-	//var parsedAst = tp.createAST(grmContent);
-	//console.log(JSON.stringify(parsedAst, null,'  '));
+
+	console.log(' pos='+ tp.position());
+	var tp2 = createASTParser(grmContent);
+	var parsedAst = tp2.createAST(grmContent);
+	console.log(' pos 2='+ tp2.position());
+	console.log(JSON.stringify(parsedAst, null,'  '));
 	
 	console.log('BitSet test');
 	
@@ -64,3 +68,5 @@ console.log('-------------------');
 	//assert.notEqual(AST.isPath(tree.chr[0].chr[0], 'A', 'B','C'), 'AST.isPath (3) test failed');
 	console.log('Unit Test is over');
 })();
+
+

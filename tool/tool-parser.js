@@ -1,6 +1,8 @@
 var ANTLRParser = require('./parser.js').ANTLRParser;
 var util= require('util');
-(function(){
+
+module.exports = function(text){
+
 var OPTIONS = 'options';
 var TOKENS_SPEC  = 'tokens';
 var IMPORT       = 'import'               ;
@@ -115,15 +117,18 @@ var _ch = null;
 var _chBuf = [];
 var pos = 0;
 var lineno = 1;
-var input = null;
+var input = text;
 var token = null;
 
-exports.init=function(text){
+function init(text){
 	input = text;
 }
-exports.createAST = function(text){
+function createAST(text){
 	input = text;
 	return grammar();
+}
+function position(){
+	return pos;
 }
 
 function nextChar(){
@@ -152,7 +157,6 @@ function consumeChar(){
 
 function identity(){
 	var ch = LA(), text ='';
-	var c = ch.charCodeAt(0);
 	if( (ch >= 'a' && ch <= 'z') || 
 		(ch >= 'A' && ch <= 'Z') ||
 		ch == '_'){
@@ -272,11 +276,21 @@ function nextToken(){
 		case "'": tk = stringlit("'")
 			break;
 		default:
+			
 			tk = identity();
 			if(tk){
 				if(tk.text in _litMap){
 					tk = {type: _litMap[tk.text], text:tk.text}
 				}
+				break;
+			}else if(ch >= '0' && ch <= '9'){
+				var text = '';
+				do{
+					consumeChar();
+					text += ch;
+					ch = LA();
+				}while(ch >= '0' && ch <= '9');
+				tk = {type: 'INT', text: text};
 				break;
 			}
 			throw mischar(ch);
@@ -372,25 +386,49 @@ function consume(){
 	return c;
 }
 
-function lt(n, type){
+var _lastLt;
+var _lastLtCount = 0;
+function lt(n, type, type2, type3){
 	if(n == undefined)
 		n = 1;
 	if(type != undefined){
-	    return isLT(n, type);
+	    return isLT.apply(this, arguments);
 	}
 	var idx = n-1;
 	while(idx >= _tokenBuf.length){
 		_tokenBuf.push(nextToken());
 	}
+	if(_tokenBuf[idx] == _lastLt)
+		_lastLtCount ++;
+	else{
+		_lastLt = _tokenBuf[idx];
+		_lastLtCount = 0;
+	}
+	if(_lastLtCount > 20){
+		//console.log("endless loop on lt(), token="+ _tokenBuf[idx].type);
+		debugger;
+	}
+	if(_lastLtCount > 25){
+		throw new Error("endless loop on lt(), token="+ _tokenBuf[idx].type);
+	}
 	return _tokenBuf[idx];
 }
-function isLT(n, type){
+function isLT(n, type, type2, type3){
 	var t = lt(n);
-	if(type == t) return true;
+	
 	if(t.type){
-		return t.type == type;
+		for(var i=1,l=arguments.length; i<l; i++){
+			if(arguments[i] == t.type) return true;
+			if(arguments[i].type == t.type) return true;
+		}
+		return false;
+	}else{
+		for(var i=1,l=arguments.length; i<l; i++){
+			if(arguments[i] == t) return true;
+			if(arguments[i].type == t) return true;
+		}
+		return false;
 	}
-	return t == null? false: t == type.type;
 }
 function _location(){
 	return 'at line '+ lineno + ', position '+ pos + ',';
@@ -408,9 +446,9 @@ function grammar(){
 	var _id = id();
 		g.chr.push(_id);
 	match(_litMap[';']);
-	while(isLT(1,'TOKENS_SPEC') || isLT(1, 'AT'))
+	while(lt(1,'TOKENS_SPEC') || lt(1, 'AT') || lt(1, 'OPTIONS'))
 		g.chr.push(prequelConstruct());
-	rules();
+	g.chr.push(rules());
 	while(lt(1) == MODE){
 		modeSpec();
 	}
@@ -428,7 +466,7 @@ function grammarType(){
 		consume();
 		match('GRAMMAR');
 		return { type:ANTLRParser.GRAMMAR, grammarType:'PARSER' };
-	}else if(isLT(1, 'GRAMMAR')){
+	}else if(lt(1, 'GRAMMAR')){
 		consume();
 		return { type:ANTLRParser.GRAMMAR, grammarType:'COMBINED' };
 	}else{
@@ -436,9 +474,10 @@ function grammarType(){
 	}
 }
 function id(){
-	if(isLT(1, 'TOKEN_REF') || isLT(1, 'RULE_REF') ){
+	if(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF') ){
 		var t = lt();
 		consume();
+		t.type = 'ID';
 		return t;
 	}
 	throw mismatch(['TOKEN_REF', 'RULE_REF']);
@@ -448,6 +487,8 @@ function prequelConstruct(){
 		return tokensSpec();
 	else if(lt(1).type == 'AT')
 		return action();
+	else if(lt(1, 'OPTIONS'))
+		return optionsSpec();
 	else
 		throw mismatch(['tokens','@']);
 }
@@ -456,29 +497,33 @@ function rules(){
 	while(!lt(1, 'MODE') && !lt(1, EOF)){
 		if(lt(1, 'RULE_REF'))
 			children.push(parserRule());
-		else if(lt(1, 'TOKEN_REF'))
+		else if(lt(1, 'TOKEN_REF', 'FRAGMENT'))
 			children.push(lexerRule());
 		else
-			throw mismatch('RULE_REF','TOKEN_REF');
+			throw mismatch('RULE_REF','TOKEN_REF','FRAGMENT');
 	}
 	return {type:'RULES', chr:children};
 }
 function parserRule(){
-	
 	match('RULE_REF'); match('COLON');
 }
 function lexerRule(){
-	match('TOKEN_REF'); match('COLON');
-	lexerRuleBlock(); match('SEMI');
+	var chr = [];
+	if(lt(1,'FRAGMENT'))
+		chr.push( {type:'RULEMODIFIERS', chr:[consume()]});
+	var name = match('TOKEN_REF'); 
+	chr.unshift(name);
+	match('COLON');
+	chr.push(lexerRuleBlock()); match('SEMI');
+	return {type:'RULE', chr:chr};
 }
 function lexerRuleBlock(){
-	lexerAltList();
-	return {type:'BLOCK', chr:lexerAltList};
+	return {type:'BLOCK', chr:lexerAltList()};
 }
 function lexerAltList(){
 	var list = [];
 	list.push(lexerAlt());
-	while(isLT(1, 'OR')){
+	while(lt(1, 'OR')){
 		consume();
 		list.push(lexerAlt());
 	}
@@ -505,18 +550,24 @@ function lexerElements(){
 }
 function is_lexerElement(){
 	var tk = lt();
-	return tk.type in {TOKEN_REF:1, RULE_REF:1, STRING_LITERAL:1, NOT:1, DOT:1, LEXER_CHAR_SET:1};
+	//debugger;
+	return tk.type in {TOKEN_REF:1, RULE_REF:1, STRING_LITERAL:1, NOT:1, DOT:1, LEXER_CHAR_SET:1,
+	LPAREN:1, ACTION:1, SEMPRED:1};
 }
 function lexerElement(){
 	//labeledLexerElement | lexerAtom | lexerBlock | actionElement 
-	if(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF')){
+	//console.log("lexerElement() lt="+ util.inspect(lt()));
+	var nt = lt();
+	switch(nt.type){
+	case 'TOKEN_REF':
+	case'RULE_REF':
 		if(lt(2, 'ASSIGN') || lt(2, 'PLUS_ASSIGN')){
 			var lbe = labeledLexerElement();
-			if(lt(1, 'QUESTION') || lt(1, 'START') || lt(1, 'PLUS')){
+			if(lt(1, 'QUESTION', 'START', 'PLUS')){
 				var bnf = ebnfSuffix();
 				bnf.chr = [{
 					type:'BLOCK',
-					chr:[ 
+					chr:[
 						{
 							type: 'ALT',
 							chr:[ lbe ]
@@ -526,11 +577,65 @@ function lexerElement(){
 			}else{
 				return lbe;
 			}
+		}else{
+			var latom = lexerAtom();
+			if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
+				var bnf = ebnfSuffix();
+				bnf.chr = [{
+					type:'BLOCK',
+					chr:[
+						{
+							type: 'ALT',
+							chr:[ latom ]
+						}
+					]}];
+				return bnf;
+			}else
+				return latom;
 		}
+		break;
+	case 'STRING_LITERAL':
+	case 'NOT':
+	case 'DOT':
+	case 'LEXER_CHAR_SET':
+		var latom = lexerAtom();
+		if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
+			var bnf = ebnfSuffix();
+			bnf.chr = [{
+				type:'BLOCK',
+				chr:[
+					{
+						type: 'ALT',
+						chr:[ latom ]
+					}
+				]}];
+			return bnf;
+		}else
+			return latom;
+		break;
+	case 'LPAREN':
+		var lblock = lexerBlock();
+		if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
+			var bnf = ebnfSuffix();
+			bnf.chr = [{
+				type:'BLOCK',
+				chr:[
+					{
+						type: 'ALT',
+						chr:[ lblock ]
+					}
+				]}];
+			return bnf;
+		}else
+			return lblock;
+		break;
+	case 'ACTION':
+	case 'SEMPRED':
+		actionElement();
+		break;
+	default:
+		throw mismatch('lexerElement');
 	}
-	lexerAtom();
-	lexerBlock();
-	actionElement();
 }
 function labeledLexerElement(){
 	var _id = id();
@@ -542,9 +647,190 @@ function labeledLexerElement(){
 	ass.chr = [_id, l];
 	return ass;
 }
+/**		range: STRING_LITERAL RANGE^ STRING_LITERAL
+	|	terminal: TOKEN_REF elementOptions? | STRING_LITERAL elementOptions?
+    |   RULE_REF<RuleRefAST>
+    |	notSet
+    |	wildcard
+    |	LEXER_CHAR_SET
+ lookahead: STRING_LITERAL,TOKEN_REF,RULE_REF,NOT,DOT,LEXER_CHAR_SET
+    */
+function lexerAtom(){
+	if(lt(1, 'STRING_LITERAL') && lt(2, 'RANGE')){
+		var children = [];
+		children.push(consume());
+		var r = match('RANGE');
+		children.push(match('STRING_LITERAL'));
+		r.chr = children;
+		return r;
+	}else if(lt(1, 'TOKEN_REF') || lt(1, 'STRING_LITERAL')){
+		var r = consume();
+		r.chr = [];
+		if(lt(1, 'LT')){
+			r.chr.push(elementOptions());
+		}
+		return r;
+	}else if(lt(1,'RULE_REF')){
+		return consume();
+	}else if(lt(1, 'NOT')){
+		return notSet();
+	}else if(lt(1, 'DOT')){
+		return wildcard();
+	}else if(lt(1,'LEXER_CHAR_SET')){
+		return consume();
+	}else{
+		throw mistach('STRING_LITERAL,TOKEN_REF,RULE_REF,NOT,DOT,LEXER_CHAR_SET');
+	}
+}
+function elementOptions(){
+	var chr = [];
+	consume();
+	if(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF')){
+		chr.push(elementOption());
+		while(lt(1, 'COMMA')){
+			consume();
+			chr.push(elementOption());
+		}
+	}
+	match('GT');
+	return {type:'ELEMENT_OPTIONS', chr:chr};
+}
+function elementOption(){
+	var _id = match('TOKEN_REF', 'RULE_REF');
+	var text = _id.text;
+	if(lt(1, 'DOT')){
+		while(lt(1, 'DOT')){
+			//qid
+			consume();
+			text += '.';
+			_id = match('TOKEN_REF', 'RULE_REF');
+			text += _id.text;
+		}
+		return {type:'ID', text:text};
+	}else if(lt(1, 'ASSIGN')){
+		var r = consume();
+		var optionValue = consume();
+		r.chr = [_id, optionValue];
+		return r;
+	}else{
+		throw mistach(DOT, ASSIGN);
+	}
+}
+/**
+LPAREN
+        ( optionsSpec COLON )?
+        lexerAltList
+        RPAREN
+*/
+function lexerBlock(){
+	var chr = [];
+	match('LPAREN');
+	if(lt(1, 'OPTIONS')){
+		chr.push(optionsSpec());
+		match('COLON');
+	}
+	chr.push(lexerAltList());
+	match('RPAREN');
+	return {type:'BLOCK', chr:chr};
+}
+
+/** OPTIONS (option SEMI)* RBRACE -> ^(OPTIONS[$OPTIONS, "OPTIONS"] option*)
+*/
+function optionsSpec(){
+	var r = match('OPTIONS');
+	r.chr = [];
+	match('LBRACE');
+	
+	while(lt(1, 'TOKEN_REF', 'RULE_REF')){
+		r.chr.push(option());
+		match('SEMI');
+	}
+	match('RBRACE');
+	return r;
+}
+/** id ASSIGN^ optionValue */
+function option(){
+	var chr = [];
+	chr.push(id());
+	var r = match('ASSIGN');
+	
+	chr.push(optionValue());
+	r.chr = chr;
+	return r;
+}
+/**
+	qid
+    | STRING_LITERAL
+	| ACTION<ActionAST>
+    | INT
+    */
+function optionValue(){
+	console.log('optionValue() lt ='+ util.inspect(lt()));
+	if(lt(1, 'TOKEN_REF', 'RULE_REF'))
+		return qid();
+	else
+		return match('STRING_LITERAL', 'ACTION', 'INT');
+}
+
+function qid(){
+	var d = id();
+	var text = d.text;
+	while(lt(1, 'DOT')){
+		text += consume();
+		text += id().text;
+	}
+	return {type: 'ID', text:text};
+}
 function is_lexerCommands(){
 }
 function lexerCommands(){}
+function notSet(){
+	var not = match('NOT');
+	if(lt(1,'LPAREN')){
+		not.chr = [blockSet()];
+		
+	}else{
+		not.chr=[{type:'NOT', chr:[setElement()]}];
+	}
+	return not;
+}
+function setElement(){
+	switch(lt().type){
+	case 'STRING_LITERAL':
+		var r = consume();
+		if(lt(1,'RANGE')){
+			var ra = consume();
+			var s = match('STRING_LITERAL');
+			ra.chr = [r, s];
+			return ra;
+		}
+		return r;
+	case 'TOKEN_REF':
+	case 'LEXER_CHAR_SET':
+		return consume();
+	default:
+		throw mismatch(['STRING_LITERAL', 'TOKEN_REF', 'LEXER_CHAR_SET']);
+	}
+}
+
+function blockSet(){
+	var children = [];
+	match('LPAREN');
+	children.push(setElement());
+	while(lt(1, 'OR'))
+		children.push(setElement());
+	match('RPAREN');
+	return {type:'SET', chr:children};
+}
+
+function wildcard(){
+	var chr =[];
+	match('DOT');
+	if(lt(1, 'LT')){
+		chr.push(elementOptions());
+	}
+	return {type:'WILDCARD', chr:chr};
+}
 
 function ebnfSuffix(){
 	var t = lt(), nongreedy = null;
@@ -571,33 +857,47 @@ function tokensSpec(){
 	match('TOKENS_SPEC');
 	match(_litMap['{']);
 	var ids = [];
-	if(isLT(1, 'TOKEN_REF') || isLT(1, 'RULE_REF') ){
+	if(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF') ){
 		ids.push(id());
-		while(isLT(1, 'COMMA')){
+		while(lt(1, 'COMMA')){
 			consume();
 			ids.push(id());
 		}
-		if(isLT(1, _litMap[';'])){
+		if(lt(1, _litMap[';'])){
 			consume();
-			while(isLT(1, 'TOKEN_REF') || isLT(1, 'RULE_REF')){
+			while(lt(1, 'TOKEN_REF') || lt(1, 'RULE_REF')){
 				ids.push(id());
 				match(_litMap[';']);
 			}
 		}
 	}
-	match('}');
+	match(_litMap['}']);
 	
 	return {
 		type:'TOKENS_SPEC', chr:ids
 	};
 }
 
-function match(s){
-	if(!isLT(1, s))
-		throw mismatch(s);
-	consume();
+function match(s, s2, s3){
+	//console.log("match() "+ util.inspect(arguments));
+	for(var i =0, l=arguments.length; i<l; i++){
+		if(lt(1, arguments[i]))
+			return consume();
+	}
+	var expect = s;
+	for(i = 1, l=arguments.length; i<l; i++){
+		expect += ',';
+		expect += arguments[i];
+		
+	}
+	throw mismatch(expect);
 }
 
-exports.nextToken = nextToken;
-exports.EOF = EOF;
-})();
+return {
+	createAST:createAST,
+	init:init,
+	position:position,
+	nextToken:nextToken,
+	EOF:EOF
+};
+}
