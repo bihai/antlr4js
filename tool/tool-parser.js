@@ -505,8 +505,59 @@ function rules(){
 	return {type:'RULES', chr:children};
 }
 function parserRule(){
-	match('RULE_REF'); match('COLON');
+	var chr = [];
+	chr.push(match('RULE_REF'));
+	chr = chr.concat(rulePrequels());
+	match('COLON');
+	chr.push(ruleBlock());
+	match('SEMI');
+	return {type:'RULE', chr:chr};
 }
+function rulePrequels(){
+	var ret = [];
+	while(lt(1, 'OPTIONS', 'AT')){
+		ret.push(rulePrequel());
+	}
+	return ret;
+}
+function rulePrequel(){
+	if(lt(1, 'OPTIONS')){
+		return optionsSpec();
+	}else{
+		return ruleAction();
+	}
+}
+
+function ruleAction(){
+	var at = match('AT');
+	at.chr = [];
+	at.chr.push(id());
+	at.chr.push(match('ACTION'));
+	return at;
+}
+
+function ruleBlock(){
+	var chr = ruleAltList();
+	return {type:'BLOCK', chr: chr};
+}
+
+function ruleAltList(){
+	var list = [labeledAlt()];
+	while(!lt(1, 'SEMI')){
+		list.push(labeledAlt());
+	}
+	return list;
+}
+
+function labeledAlt(){
+	//todo
+	alternative();
+}
+
+function alternative(){
+	//todo
+}
+
 function lexerRule(){
 	var chr = [];
 	if(lt(1,'FRAGMENT'))
