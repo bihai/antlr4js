@@ -551,13 +551,168 @@ function ruleAltList(){
 
 function labeledAlt(){
 	//todo
-	alternative();
+	var ret = alternative();
+	if(lt(1, 'POUND')){
+		ret.altLabel = id();
+	}
+	return ret;
 }
 
 function alternative(){
+	
+	if(lt(1, 'LT') || is_element()){
+		var e = [];
+		if(lt(1, 'LT')){
+			e.push(elementOptions());
+		}
+		e.push(element());
+		while(is_element()){
+			e.push(element());
+		}
+		return {type: 'ALT', chr:e};
+	}else{
+		return {type:'ALT', chr:[{type:'EPSILON'}]};
+	}
+}
+/** 
+	labeledElement: (id (ass=ASSIGN|ass=PLUS_ASSIGN) ) 
+	| atom
+			range  (STRING_LITERAL)
+		|	terminal (TOKEN_REF | STRING_LITERAL )
+		|   ruleref	 (RULE_REF)
+		|	notSet	(NOT)
+		|	wildcard (DOT)
+    | ebnf (LPAREN) 
+    | actionElement (ACTION | SEMPRED)
+*/
+var element_lt = {
+	TOKEN_REF:1, RULE_REF:1, STRING_LITERAL:1, NOT:1, DOT:1, LPAREN:1, ACTION:1, SEMPRED:1
+};
+function is_element(){
+	var t = lt();
+	return t.type in element_lt;
+}
+function element(){
 	//todo
+	switch(lt().type){
+	case 'TOKEN_REF':
+	case 'RULE_REF':
+		if(lt(2, 'ASSIGN', 'PLUS_ASSIGN')){
+			var le = labeledElement();
+			if(lt(1, 'QUESTION', 'START', 'PLUS')){
+				var ret = ebnfSuffix();
+				ret.chr = [{type:'BLOCK', chr:[{type: 'ALT', chr: [le]}] }];
+				return ret;
+			}
+			return le;
+		}
+	case 'STRING_LITERAL':
+	case 'NOT':
+	case 'DOT':
+		var ret = atom();
+		if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
+			var bnf = ebnfSuffix();
+			bnf.chr = [{
+				type:'BLOCK',
+				chr:[{
+						type: 'ALT',
+						chr:[ ret ]
+					} ]
+			}];
+			return bnf;
+		}else
+			return ret;
+		break;
+	case 'LPAREN':
+		return ebnf();
+	case 'ACTION':
+	case 'SEMPRED':
+		return actionElement();
+	default:
+		throw mismatch('element');
+	}
+}
+/**
+		range  (STRING_LITERAL RANGE^ STRING_LITERAL)
+	|	terminal (TOKEN_REF | STRING_LITERAL )
+	|   ruleref	 (RULE_REF)
+	|	notSet	(NOT)
+	|	wildcard (DOT)
+*/
+function atom(){
+	switch(lt().type){
+	case 'STRING_LITERAL':
+		if(lt(2, 'RANGE')){
+			var chr = [];
+			chr.push(consume());
+			var rangeNode = consume();
+			chr.push(match('STRING_LITERAL'));
+			rangeNode.chr = chr;
+			return rangeNode;
+		}
+		return consume();
+	case 'TOKEN_REF':
+		return consume();
+	case 'RULE_REF':
+		return ruleref();
+	case 'NOT':
+		return notSet();
+	case 'DOT':
+		return wildcard();
+	}
+}
+function ruleref(){
+	return match('RULE_REF');
 }
 
+function ebnf(){
+	var bl = block();
+	if(lt(1, 'QUESTION', 'START', 'PLUS')){
+		var ret = blockSuffix();
+		ret.chr = [bl];
+		return ret;
+	}
+	return bl;
+}
+/**
+LPAREN
+        ( optionsSpec? ra+=ruleAction* COLON )?
+        altList
+		RPAREN
+      -> ^(BLOCK<BlockAST>[$LPAREN,"BLOCK"] optionsSpec? $ra* altList )
+*/
+function block(){
+	var chr = [];
+	match('LPAREN');
+	if(lt(1, 'OPTIONS', 'AT', 'COLON')){
+		if(lt(1, 'OPTIONS')){
+			chr.push(optionsSpec());
+		}
+		while(lt(1, 'AT')){
+			chr.push(ruleAction());
+		}
+		match('COLON');
+	}
+	chr = chr.concat(altList());
+	match('RPAREN');
+	return {type:'BLOCK', chr:chr};
+}
+/**
+	alternative (OR alternative)* -> alternative+ 
+*/
+function altList(){
+	var list = [];
+	do{
+		list.push(alternative());
+	}while(lt(1, 'LT') || is_element());
+	return list;
+}
+function blockSuffix(){
+	return ebnfSuffix();
+}
+function actionElement(){
+	//todo
+}
 function lexerRule(){
 	var chr = [];
 	if(lt(1,'FRAGMENT'))
@@ -628,23 +783,7 @@ function lexerElement(){
 			}else{
 				return lbe;
 			}
-		}else{
-			var latom = lexerAtom();
-			if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
-				var bnf = ebnfSuffix();
-				bnf.chr = [{
-					type:'BLOCK',
-					chr:[
-						{
-							type: 'ALT',
-							chr:[ latom ]
-						}
-					]}];
-				return bnf;
-			}else
-				return latom;
 		}
-		break;
 	case 'STRING_LITERAL':
 	case 'NOT':
 	case 'DOT':
@@ -682,8 +821,7 @@ function lexerElement(){
 		break;
 	case 'ACTION':
 	case 'SEMPRED':
-		actionElement();
-		break;
+		return actionElement();
 	default:
 		throw mismatch('lexerElement');
 	}
