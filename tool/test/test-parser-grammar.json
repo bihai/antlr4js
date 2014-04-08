@@ -66,4 +66,47 @@ UNICODE_ESC
     	)
 
     ;
- 
+
+WS
+: (
+	  ' '
+    | '\t'
+    | '\r'
+    | '\n'
+    | '\f'
+  )+
+	
+;
+
+// A fragment rule for use in recognizing end of line in
+// rules like COMMENT.
+//
+fragment
+NLCHARS
+    : '\n' | '\r'
+    ;
+
+// A fragment rule for recognizing traditional whitespace
+// characters within lexer rules.
+//
+fragment
+WSCHARS
+    : ' ' | '\t' | '\f'
+    ;
+    
+ERRCHAR
+    : .
+    ;
+    
+expression:
+	 
+		'(' 
+			expression
+		')'
+	|	basicExp ( '+' | '-' ) basicExp
+;
+
+basicExp: mExp ('*' | '/' ) mExp;
+
+mExp:Number;
+Number: [0-9]? '.'? [0-9]+;

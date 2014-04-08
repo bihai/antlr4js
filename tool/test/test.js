@@ -15,8 +15,8 @@ console.log('-------------------');
 	console.log('Unit Test starts');
 	console.log('tool parser test');
 	var grmContent = fs.readFileSync('test-parser-grammar.json', {encoding:'utf-8'});
-	var createASTParser = require('../tool-parser.js');
-	var tp = createASTParser(grmContent);
+	var grammarParser = require('../tool-parser.js');
+	var tp = grammarParser(grmContent);
 	var token = tp.nextToken();
 	 while(token != tp.EOF){
 		console.log("token:"+ util.inspect(token));
@@ -24,7 +24,7 @@ console.log('-------------------');
 	}
 
 	console.log(' pos='+ tp.position());
-	var tp2 = createASTParser(grmContent);
+	var tp2 = grammarParser(grmContent);
 	var parsedAst = tp2.createAST(grmContent);
 	console.log(' pos 2='+ tp2.position());
 	console.log(JSON.stringify(parsedAst, null,'  '));

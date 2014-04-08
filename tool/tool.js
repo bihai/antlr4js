@@ -7,7 +7,8 @@ var IntervalSet = misc.IntervalSet;
 var OrderedHashMap = misc.OrderedHashMap;
 var LinkedHashMap = OrderedHashMap;
 var Utils = misc.Utils;
-var ANTLRParser = require('./parser.js').ANTLRParser;
+var ANTLRParser = require('./constants.js').ANTLRParser;
+var grammarParser = require('./tool-parser.js');
 var _A = ANTLRParser,
 	UUID_COUNT = 1;
 
@@ -643,16 +644,13 @@ Tool.prototype={
 		}, this);
 	},
 	_file2Ast:function(fileNames){
-		var json = fs.readFileSync(fileNames == null || fileNames[0] == null? 'grammar-ast.json': fileNames[0],
-			'utf-8');
-		console.log("read:\n"+ json);
-		//json = JSON.parse(json)
-		json = eval(json);
-		console.log(">>:\n"+ json);
-		json.forEach(function(grmJson){
-				AST.processRaw(grmJson);
+		var grammars = [];
+		fileNames.forEach(function(file){
+				var json = grammarParser(fs.readFileSync(file, 'utf-8')).createAST();
+				json = eval(json);
+				grammars.push(AST.processRaw(json));
 		}, this);
-		return json;
+		return grammars;
 	},
 	
 	/**

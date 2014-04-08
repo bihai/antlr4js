@@ -1,4 +1,4 @@
-var ANTLRParser = require('./parser.js').ANTLRParser;
+var ANTLRParser = require('./constants.js').ANTLRParser;
 var util= require('util');
 
 module.exports = function(text){
@@ -543,7 +543,9 @@ function ruleBlock(){
 
 function ruleAltList(){
 	var list = [labeledAlt()];
-	while(!lt(1, 'SEMI')){
+	
+	while(lt(1, 'OR')){
+		consume();
 		list.push(labeledAlt());
 	}
 	return list;
@@ -701,10 +703,11 @@ function block(){
 	alternative (OR alternative)* -> alternative+ 
 */
 function altList(){
-	var list = [];
-	do{
+	var list = [alternative()];
+	while( lt(1, 'OR') ){
+		consume();
 		list.push(alternative());
-	}while(lt(1, 'LT') || is_element());
+	}
 	return list;
 }
 function blockSuffix(){
