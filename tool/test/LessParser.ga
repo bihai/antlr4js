@@ -1,0 +1,24 @@
+parser grammar LessParser;
+
+cssfile:
+    (cssUnit | cssRule)*
+    ;
+    
+cssRule
+    : RULE_NAME ~(';')*? ( '{' style* '}' | ':' lessValue )? ';'
+    ;
+lessValue:
+	(~(';'))+
+	;
+    
+cssUnit :
+    selector '{' ( cssUnit | style )* '}'
+    ;
+selector
+    : ~('{' | '}' | ';')+
+    ;
+    
+style:
+	(~( '{' | '}' | ';' ))+  ';'
+	;
+

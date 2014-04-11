@@ -250,11 +250,11 @@ exports.MultiMap = (function(){
 	function IntervalSet(intervals){
 		this.readonly = false;
 		if(arguments.length == 0){
-			this.intervals = new Array(2);
+			this.intervals = [];
 		}else if(arguments.length == 1 && util.isArray(intervals)){
 			this.intervals = intervals;
 		}else{
-			this.intervals = new Array(arguments.length);
+			this.intervals = [];
 			for(var i=0,l=arguments.length;i<l;i++){
 				this.add(arguments[i]);
 			}
@@ -319,7 +319,7 @@ exports.MultiMap = (function(){
 			}
 			// ok, must be after last interval (and disjoint from last interval)
 			// just add it
-			intervals.add(addition);
+			intervals.push(addition);
         },
         contains:function(el) {
 			var n = this.intervals.length;

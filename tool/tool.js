@@ -95,8 +95,10 @@ AST={
 	getNodesWithType:function(tree, types) {
 		if(typeof(types) == 'number')
 			types = IntervalSet.of(types);
-		else if(typeof(types) == 'string')
+		else if(typeof(types) == 'string'){
+			debugger;
 			types = IntervalSet.of(ANTLRParser[types]);
+		}
 		var nodes = [];
 		var work = [tree];
 		var t = null;
@@ -646,7 +648,7 @@ Tool.prototype={
 	_file2Ast:function(fileNames){
 		var grammars = [];
 		fileNames.forEach(function(file){
-				var json = grammarParser(fs.readFileSync(file, 'utf-8')).createAST();
+				var json = grammarParser().createAST(fs.readFileSync(file, {encoding:'utf-8'}));
 				json = eval(json);
 				grammars.push(AST.processRaw(json));
 		}, this);
@@ -727,6 +729,8 @@ Tool.prototype={
 		var sem = new SemanticPipeline(g);
 		sem.process();
 		if ( this.errMgr.getNumErrors()>prevErrors ) return;
+		
+		/* Todo
 		var factory = null;
 		if ( g.isLexer() )
 			factory = new LexerATNFactory(g);
@@ -747,7 +751,7 @@ Tool.prototype={
 		if ( gencode ) {
 			var gen = new CodeGenPipeline(g);
 			gen.process();
-		}
+		} */
 	},
 	checkForRuleIssues:function(g) {
 		// check for redefined rules
@@ -800,6 +804,7 @@ Tool.prototype={
 
 		return redefinition || _undefined;
 	},
+	getNumErrors:function() { return this.errMgr.getNumErrors(); },
 	exit:function(e){
 		process.exit(e);
 	},
@@ -816,15 +821,15 @@ function GrammarTransformPipeline(g, tool){
 }
 GrammarTransformPipeline.prototype={
 	process:function() {
-		var root = g.ast;
+		var root = this.g.ast;
 		if ( root==null ) return;
-        tool.log("grammar", "before: "+ util.inspect(root));
+        this.tool.log("grammar", "before: "+ util.inspect(root));
 
-        this.integrateImportedGrammars(g);
+        this.integrateImportedGrammars(this.g);
 		//reduceBlocksToSets(root);
         //expandParameterizedLoops(root);
 
-        tool.log("grammar", "after: "+ util.inspect(root));
+        this.tool.log("grammar", "after: "+ util.inspect(root));
 	},
 	integrateImportedGrammars:function(rootGrammar){
 		var root = rootGrammar.ast;
@@ -833,7 +838,7 @@ GrammarTransformPipeline.prototype={
 
 	 	var tokensRoot = AST.getFirstChildWithType(root, 'TOKENS_SPEC');
 
-		var actionRoots = root.getNodesWithType("AT");
+		var actionRoots = AST.getNodesWithType(root, "AT");
 
 		// Compute list of rules in root grammar and ensure we have a RULES node
 		var RULES = AST.getFirstChildWithType(root, "RULES");
@@ -1292,8 +1297,8 @@ SemanticPipeline.prototype={
 		if ( this.g.ast==null ) return;
 
 		// COLLECT RULE OBJECTS
-		var ruleCollector = new RuleCollector(g);
-		ruleCollector.process(g.ast);
+		var ruleCollector = new RuleCollector(this.g);
+		ruleCollector.process(this.g.ast);
 
 		// DO BASIC / EASY SEMANTIC CHECKS
 		/* var basics = new BasicSemanticChecks(g, ruleCollector);

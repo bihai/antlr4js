@@ -117,7 +117,7 @@ var _ch = null;
 var _chBuf = [];
 var pos = 0;
 var lineno = 1;
-var input = text;
+var input = null;
 var token = null;
 
 function init(text){
@@ -300,6 +300,7 @@ function nextToken(){
 	if(tk != EOF && tk.type == null){
 		throw mischar(tk.text);
 	}
+	console.log("token: "+ util.inspect(tk));
 	return tk;
 }
 function multiLineComment(){
@@ -340,6 +341,9 @@ function stringlit(startChar){
 	while(ch != startChar){
 		if(ch == EOF)
 			throw mismatch('<EOF>');
+		if(ch == '\\'){
+			text += consumeChar();
+		}
 		text += consumeChar();
 		ch = LA();
 	}
@@ -404,10 +408,9 @@ function lt(n, type, type2, type3){
 		_lastLt = _tokenBuf[idx];
 		_lastLtCount = 0;
 	}
-	if(_lastLtCount > 20){
+	/* if(_lastLtCount > 20){
 		//console.log("endless loop on lt(), token="+ _tokenBuf[idx].type);
-		debugger;
-	}
+	} */
 	if(_lastLtCount > 25){
 		throw new Error("endless loop on lt(), token="+ _tokenBuf[idx].type);
 	}
@@ -669,7 +672,7 @@ function ruleref(){
 
 function ebnf(){
 	var bl = block();
-	if(lt(1, 'QUESTION', 'START', 'PLUS')){
+	if(lt(1, 'QUESTION', 'STAR', 'PLUS')){
 		var ret = blockSuffix();
 		ret.chr = [bl];
 		return ret;
@@ -743,7 +746,7 @@ function lexerAlt(){
 		var le = lexerElements();
 		if(is_lexerCommands()){
 			var lc = lexerCommands();
-			return {type:'LEXER_ALT_ACTION', chr:[le,lc]};
+			return {type:'LEXER_ALT_ACTION', chr:[le].concat(lc)};
 		}
 		return le;
 	}
@@ -759,7 +762,6 @@ function lexerElements(){
 }
 function is_lexerElement(){
 	var tk = lt();
-	//debugger;
 	return tk.type in {TOKEN_REF:1, RULE_REF:1, STRING_LITERAL:1, NOT:1, DOT:1, LEXER_CHAR_SET:1,
 	LPAREN:1, ACTION:1, SEMPRED:1};
 }
@@ -974,8 +976,42 @@ function qid(){
 	return {type: 'ID', text:text};
 }
 function is_lexerCommands(){
+	return lt(1, 'RARROW');
 }
-function lexerCommands(){}
+function lexerCommands(){
+	var cmds = [];
+	match('RARROW');
+	cmds.push(lexerCommand());
+	while(lt(1, 'COMMA')){
+		cmds.push(lexerCommand());
+	}
+	return cmds;
+}
+
+function lexerCommand(){
+	var name = lexerCommandName();
+	if(lt(1, 'LPAREN')){
+		consume();
+		var expr = lexerCommandExpr();
+		match('RPAREN');
+		return {type: 'LEXER_ACTION_CALL', chr:[name, expr]};
+	}
+	return name;
+}
+function lexerCommandExpr(){
+	if(lt(1, 'INT')){
+		return consume();
+	}
+	return id();
+}
+function lexerCommandName(){
+	if(lt(1, 'MODE')){
+		var m = consume();
+		return {type:'ID', text:m.text};
+	}else{
+		return id();
+	}
+}
 function notSet(){
 	var not = match('NOT');
 	if(lt(1,'LPAREN')){
@@ -1009,8 +1045,10 @@ function blockSet(){
 	var children = [];
 	match('LPAREN');
 	children.push(setElement());
-	while(lt(1, 'OR'))
+	while(lt(1, 'OR')){
+		consume();
 		children.push(setElement());
+	}
 	match('RPAREN');
 	return {type:'SET', chr:children};
 }
@@ -1025,21 +1063,21 @@ function wildcard(){
 }
 
 function ebnfSuffix(){
-	var t = lt(), nongreedy = null;
+	var t = lt();
 	if(t.type == 'QUESTION'){
 		consume();
 		if(lt(1, 'QUESTION'))
-			nongreedy = consume();
+			var nongreedy = consume();
 		return { type:'OPTIONAL', nongreedy:nongreedy};
 	}else if(t.type == 'STAR'){
 		consume();
 		if(lt(1, 'QUESTION'))
-			nongreedy = consume();
+			var nongreedy = consume();
 		return { type:'CLOSURE', nongreedy:nongreedy};
 	}else if(t.type == 'PLUS'){
 		consume();
 		if(lt(1, 'QUESTION'))
-			nongreedy = consume();
+			var nongreedy = consume();
 		return { type:'POSITIVE_CLOSURE', nongreedy:nongreedy};
 	}else{
 		throw mismatch([QUESTION, STAR, PLUS]);

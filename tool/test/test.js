@@ -1,14 +1,10 @@
 var Tool = require('../tool.js');
 var util = require('util');
 var assert = require('assert');
-
-//var tool = new Tool('grammar-ast.json');
-//var res = tool._file2Ast(['grammar-ast.json']);
 var misc = require('../misc.js');
 var fs = require('fs');
 
 console.log('-------------------');
-//console.log(util.inspect(res));
 
 (function(){
 		
