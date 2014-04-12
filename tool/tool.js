@@ -46,7 +46,13 @@ AST={
 		var work = [json];
 		while(work.length >0){
 			var node = work.shift();
-				node._uuid = UUID_COUNT++;
+			node._uuid = UUID_COUNT++;
+			var nt = AST.typeNum(node);
+			console.log('AST.processRaw() %s %d', node.type, nt);
+			if(node.type == null){
+				console.log('null type node %j', node);
+			}
+			node.type = nt;
 			if ( node.chr!=null ) {
 				for(var i=0,l=node.chr.length; i<l; i++){
 					var c = node.chr[i];
@@ -96,7 +102,6 @@ AST={
 		if(typeof(types) == 'number')
 			types = IntervalSet.of(types);
 		else if(typeof(types) == 'string'){
-			debugger;
 			types = IntervalSet.of(ANTLRParser[types]);
 		}
 		var nodes = [];
@@ -114,9 +119,13 @@ AST={
 		return nodes;
 	},
 	/** return number type of type */
-	type:function(tree){
+	typeNum:function(tree){
 		if(typeof(tree.type) == 'string')
 			return ANTLRParser[tree.type];
+		return tree.type;
+	},
+	
+	type:function(tree){
 		return tree.type;
 	},
 	isType:function(tree, type){
@@ -142,12 +151,13 @@ AST={
 			var p = node.parent;
 			//delete node.parent;
 			callback(node, type, p);
-			if ( node.chr ==null ) return;
+			
+			if ( node.chr ==null ) continue;
 			for(var i=0,l=node.chr.length; i<l; i++){
 				var c = node.chr[i];
-					if(c.parent == null)
-						c.parent = node;
-					work.push(c);
+				if(c.parent == null)
+					c.parent = node;
+				work.push(c);
 			}
 		}
 	},
@@ -160,13 +170,11 @@ AST={
 			if(tree == null)
 				return false;
 			var not = arguments[i].charAt(0) == '~';
-			debugger;
 			if(not && !AST.isType(tree, arguments[i].substring(1))  ||
 				!not && AST.isType(tree, arguments[i])) 
 				tree = tree.parent;
 			else{
 				console.log('type:'+ arguments[i]);
-				debugger;
 				return false;
 			}
 		}
@@ -785,14 +793,16 @@ Tool.prototype={
 		
 		function ruleRuf(ref){
 			var ruleAST = ruleToAST[ref.text];
+			console.log('## ruleRef() %s', ref.text);
 			if ( ruleAST==null ) {
 				_undefined = true;
 				errMgr.grammarError('UNDEFINED_RULE_REF',
 									g.fileName, ref.token, ref.text);
 			}
 		}
-		
+		console.log('-----------------------' );
 		AST.visit(g.ast, function(ref, type){
+				
 				if(type == ANTLRParser.TOKEN_REF){
 					if(ref.text == 'EOF') return;
 					if(g.isLexer()) ruleRuf(ref);
@@ -889,6 +899,7 @@ RuleCollector.prototype={
 		AST.visit(ast, function(node, type){
 			if(type == ANTLRParser.RULE){
 				var block = AST.getFirstChildWithType(node, ANTLRParser.BLOCK);
+				console.log('RuleCollector.process() %s', block.chr[0]);
 				if(AST.isType(node.chr[1], 'RULE_REF')){
 					self.discoverRule(node, node.chr[0], 
 						AST.getAllChildrenWithType(node, ANTLRParser.AT), block);
@@ -908,6 +919,7 @@ RuleCollector.prototype={
 		});
 	},
 	discoverRule:function(rule, ID, actions, block){
+		console.log('RuleCollector.discoverRule() %j', ID);
 		var numAlts = block.chr == null? 0: block.chr.length;
 		var r = null;
 		if ( LeftRecursiveRuleAnalyzer.hasImmediateRecursiveRuleRefs(rule, ID.text) ) {
@@ -1100,10 +1112,12 @@ SymbolCollector.prototype ={
 		this.tokensDefs.push(ID);
 	},
 	discoverRule:function(ID){
+		debugger;
 		this.currentRule = this.g.getRule(ID.text);
-		console.log('SymbolCollor.discoverRule '+ ID.text);
+		console.log('SymbolCollor.discoverRule %j\n'+ ID.text, this.currentRule);
 	},
 	discoverOuterAlt:function(alt) {
+		debugger;
 		this.currentRule.alt[this.currentOuterAltNumber].ast = alt;
 	},
 	actionInAlt:function(action) {
@@ -1314,6 +1328,7 @@ SemanticPipeline.prototype={
 
 		// STORE RULES IN GRAMMAR
 		ruleCollector.rules.values().forEach(function(r){
+				console.log('SemanticPipeline.process() define rule %j', r);
 				this.g.defineRule(r);
 		});
 

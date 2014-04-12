@@ -300,7 +300,7 @@ function nextToken(){
 	if(tk != EOF && tk.type == null){
 		throw mischar(tk.text);
 	}
-	console.log("token: "+ util.inspect(tk));
+	//console.log("token: "+ util.inspect(tk));
 	return tk;
 }
 function multiLineComment(){
@@ -923,7 +923,7 @@ function lexerBlock(){
 		chr.push(optionsSpec());
 		match('COLON');
 	}
-	chr.push(lexerAltList());
+	chr = chr.concat(lexerAltList());
 	match('RPAREN');
 	return {type:'BLOCK', chr:chr};
 }
