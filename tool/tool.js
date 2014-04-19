@@ -161,6 +161,21 @@ AST={
 			}
 		}
 	},
+	/** recursively visit
+	*/
+	recVisit:function(tree, callback){
+		var node = tree;
+		var type = AST.type(node);
+		var p = node.parent;
+		callback(node, type, p);
+		if ( node.chr ==null ) return;
+		for(var i=0,l=node.chr.length; i<l; i++){
+			var c = node.chr[i];
+			if(c.parent == null)
+				c.parent = node;
+			AST.recVisit(c, callback);
+		}
+	},
 	/** @parameter path is array like ['...', '<super-parent-type>','<parent-type>']
 	 path element can lead with '~', means matching any type except the one.
 	 e.g. "~ELEMENT_OPTIONS"  any type except ELEMENT_OPTIONS.
@@ -495,7 +510,7 @@ Grammar.prototype={
 		if ( this.rules.get(r.name)!=null ) return;
 		this.rules.put(r.name, r);
 		r.index = this.ruleNumber++;
-		this.indexToRule.add(r);
+		this.indexToRule.push(r);
 	},
 	getRule:function(name){
 		return this.rules.get(name);
@@ -571,9 +586,9 @@ Grammar.prototype={
 		}
 		var prev = this.tokenNameToTypeMap.get(name);
 		if ( prev!=null ) return prev;
-		tokenNameToTypeMap.put(name, ttype);
+		this.tokenNameToTypeMap.put(name, ttype);
 		this.setTokenForType(ttype, name);
-		this.maxTokenType = Math.max(maxTokenType, ttype);
+		this.maxTokenType = Math.max(this.maxTokenType, ttype);
 		return ttype;
 	},
 	getNewTokenType:function() {
@@ -601,6 +616,8 @@ Grammar.prototype={
 		else { // must be a label like ID
 			I = this.tokenNameToTypeMap.get(token);
 		}
+		if(!I)
+			debugger;
 		var i = (I!=null)? I : Token.INVALID_TYPE;
 		//tool.log("grammar", "grammar type "+type+" "+tokenName+"->"+i);
 		return i;
@@ -613,6 +630,7 @@ LexerGrammar.prototype = Object.create(Grammar.prototype);
 LexerGrammar.DEFAULT_MODE_NAME = 'DEFAULT_MODE';
 mixin(LexerGrammar.prototype,{
 	defineRule:function(r){
+		Grammar.prototype.defineRule.call(this, r);
 		if(this.modes == null){
 			this.modes = new MultiMap();
 		}
@@ -658,6 +676,7 @@ Tool.prototype={
 		fileNames.forEach(function(file){
 				var json = grammarParser().createAST(fs.readFileSync(file, {encoding:'utf-8'}));
 				json = eval(json);
+				json.fileName = file;
 				grammars.push(AST.processRaw(json));
 		}, this);
 		return grammars;
@@ -881,12 +900,20 @@ LeftRecursiveRuleAnalyzer.hasImmediateRecursiveRuleRefs = function(t, ruleName) 
 		var first = alt.chr[0];
 		if ( first==null ) continue;
 		if ( AST.type(first) == ANTLRParser.RULE_REF && first.text === ruleName ) return true;
-		var rref = first.chr[1];
+		var rref = first.chr !=null && first.chr.length >1 ? first.chr[1] : null;
 		if ( rref!=null && AST.isType(rref,ANTLRParser.RULE_REF) && rref.text === ruleName ) return true;
 	}
 	return false;
 };
+
+function GrammarTreeVisitor(){
+	this.currentModeName = 'DEFAULT_MODE';
+	this.currentOuterAltNumber = 1;
+	this.rewriteEBNFLevel = 0;
+}
+
 function RuleCollector(g){
+	GrammarTreeVisitor.call(this);
 	this.g = g;
 	this.rules = new OrderedHashMap();
 	this.ruleToAltLabels = new MultiMap();
@@ -896,30 +923,38 @@ function RuleCollector(g){
 RuleCollector.prototype={
 	process:function(ast){
 		var self = this;
-		AST.visit(ast, function(node, type){
+		AST.recVisit(ast, function(node, type, parent){
+			
+			if(parent != null && parent.type == ANTLRParser.BLOCK && 
+				parent.parent != null && parent.parent.type == ANTLRParser.RULE){
+				//debugger;
+				this.currentOuterAltNumber++;
+			}
 			if(type == ANTLRParser.RULE){
+				this.currentOuterAltNumber = 0;
 				var block = AST.getFirstChildWithType(node, ANTLRParser.BLOCK);
-				console.log('RuleCollector.process() %s', block.chr[0]);
-				if(AST.isType(node.chr[1], 'RULE_REF')){
+				if(AST.isType(node.chr[0], 'RULE_REF')){
 					self.discoverRule(node, node.chr[0], 
 						AST.getAllChildrenWithType(node, ANTLRParser.AT), block);
 					
-				}else if(AST.isType(node.chr[1], 'TOKEN_REF')){
+				}else if(AST.isType(node.chr[0], 'TOKEN_REF')){
+					var modis = [];
 					var modiNode = AST.getFirstChildWithType(node, ANTLRParser.RULEMODIFIERS);
-					if(modiNode && modi.chr){
-						var modi = modiNode.chr[0];
+					if(modiNode && modiNode.chr && modiNode.chr[0].type === ANTLRParser.FRAGMENT){
+						modis.push(modiNode.chr[0]);
 					}
-					self.discoverLexerRule(node, ID, modi, block);
+					self.discoverLexerRule(node, node.chr[0], modis, block);
 					
 				}
 				var l = block.chr ? block.chr.length: 0;
 				for(var i=0; i<l; i++)
 					self.discoverOuterAlt(block.chr[i]);//LEXER_ALT_ACTION | ALT
+			}else if(type == ANTLRParser.BLOCK){
+				this.currentOuterAltNumber++;
 			}
 		});
 	},
 	discoverRule:function(rule, ID, actions, block){
-		console.log('RuleCollector.discoverRule() %j', ID);
 		var numAlts = block.chr == null? 0: block.chr.length;
 		var r = null;
 		if ( LeftRecursiveRuleAnalyzer.hasImmediateRecursiveRuleRefs(rule, ID.text) ) {
@@ -941,10 +976,10 @@ RuleCollector.prototype={
 	},
 	discoverOuterAlt:function(alt) {
 		if ( alt.altLabel!=null ) {
-			ruleToAltLabels.map(currentRuleName, alt.altLabel);
+			ruleToAltLabels.map(this.currentRuleName, alt.altLabel);
 			var altLabel = alt.altLabel.text;
-			this.altLabelToRuleName.put(Utils.capitalize(altLabel), currentRuleName);
-			this.altLabelToRuleName.put(Utils.decapitalize(altLabel), currentRuleName);
+			this.altLabelToRuleName.put(Utils.capitalize(altLabel), this.currentRuleName);
+			this.altLabelToRuleName.put(Utils.decapitalize(altLabel), this.currentRuleName);
 		}
 	},
 	discoverLexerRule:function(rule, ID,modifiers, block){
@@ -962,7 +997,7 @@ function Rule(g, name, ast, numberOfAlts){
 	this.numberOfAlts = numberOfAlts;
 	this.actions = [];
 	this.actionIndex = -1;
-	this.alt = new Array(numberOfAlts+1); // 1..n
+	this.alt = []; // 1..n
 	for (var i=1; i<=numberOfAlts; i++)
 		this.alt[i] = new Alternative(this, i);
 }
@@ -991,6 +1026,8 @@ Rule.prototype={
 		return this.getAltLabels()!=null;
 	},
 	getAltLabels:function() {
+		console.log('getAltLabels() %s num of alts %d', this.name, this.numberOfAlts);
+		try{
 		var labels = [];
 		for (var i=1; i<=this.numberOfAlts; i++) {
 			var altLabel = this.alt[i].ast.altLabel;
@@ -1000,6 +1037,10 @@ Rule.prototype={
 		}
 		if ( labels.length == 0 ) return null;
 		return labels;
+		}catch(e){
+			console.error('i=%d', i);
+			throw e;
+		}
 	},
 	isFragment:function() {
 		if ( this.modifiers==null ) return false;
@@ -1017,6 +1058,7 @@ function Alternative(r, altNum) {
 }
 
 function SymbolCollector(g){
+	GrammarTreeVisitor.call(this);
 	this.g = g;
 	this.rulerefs = [];
 	this.qualifiedRulerefs = [];
@@ -1031,7 +1073,8 @@ function SymbolCollector(g){
 SymbolCollector.prototype ={
 	process:function(ast){
 		var self = this;
-		AST.visit(ast, function(node, type, parent){
+		AST.recVisit(ast, function(node, type, parent){
+				
 				switch(type){
 				case ANTLRParser.GRAMMAR:
 					var actions = AST.getAllChildrenWithType(node,'AT');
@@ -1047,7 +1090,7 @@ SymbolCollector.prototype ={
 							
 					}, self);
 					break;
-					
+				
 				case ANTLRParser.TOKENS_SPEC:
 					node.chr.forEach(function(id){
 							this.defineToken(id);
@@ -1055,12 +1098,15 @@ SymbolCollector.prototype ={
 					break;
 					
 				case ANTLRParser.RULE:
+					self.currentOuterAltNumber = 0;
 					//if(AST.isType(node.chr[1], 'RULE_REF')){
 					self.discoverRule(node.chr[0]);
 					var block = AST.getFirstChildWithType(node, ANTLRParser.BLOCK);
 					var l = block.chr ? block.chr.length: 0;
-					for(var i=0; i<l; i++)
+					for(var i=0; i<l; i++){
+						self.currentOuterAltNumber++;
 						self.discoverOuterAlt(block.chr[i]);
+					}
 					//}
 					break;
 				case ANTLRParser.RULE_REF:
@@ -1085,7 +1131,7 @@ SymbolCollector.prototype ={
 					}
 					break;
 				case ANTLRParser.STRING_LITERAL:
-					if( !(this.g.isLexer() && AST.isType(parent, 'RANGE')) && !AST.isType(parent.parent, 'ELEMENT_OPTIONS')){
+					if( !(self.g.isLexer() && AST.isType(parent, 'RANGE')) && !AST.isType(parent.parent, 'ELEMENT_OPTIONS')){
 						self.stringRef(node);
 					}
 					break;
@@ -1112,12 +1158,11 @@ SymbolCollector.prototype ={
 		this.tokensDefs.push(ID);
 	},
 	discoverRule:function(ID){
-		debugger;
 		this.currentRule = this.g.getRule(ID.text);
-		console.log('SymbolCollor.discoverRule %j\n'+ ID.text, this.currentRule);
+		//console.log('SymbolCollector.discoverRule %j\n'+ ID.text, this.currentRule);
 	},
 	discoverOuterAlt:function(alt) {
-		debugger;
+		console.log('discoverOuterAlt() %s alt[%d]', this.currentRule.name, this.currentOuterAltNumber);
 		this.currentRule.alt[this.currentOuterAltNumber].ast = alt;
 	},
 	actionInAlt:function(action) {
@@ -1199,7 +1244,7 @@ function SymbolChecks(g, collector){
     this.collector = collector;
 	this.errMgr = g.tool.errMgr;
     collector.tokenIDRefs.forEach(function(tokenId){
-        this.tokenIDs.add(tokenId.text);
+        this.tokenIDs[tokenId.text] = true;
     }, this);
 }
 SymbolChecks.prototype={
@@ -1309,7 +1354,6 @@ function SemanticPipeline(g){
 SemanticPipeline.prototype={
 	process:function() {
 		if ( this.g.ast==null ) return;
-
 		// COLLECT RULE OBJECTS
 		var ruleCollector = new RuleCollector(this.g);
 		ruleCollector.process(this.g.ast);
@@ -1328,10 +1372,9 @@ SemanticPipeline.prototype={
 
 		// STORE RULES IN GRAMMAR
 		ruleCollector.rules.values().forEach(function(r){
-				console.log('SemanticPipeline.process() define rule %j', r);
+				console.log('SemanticPipeline.process() define rule %s', r.name);
 				this.g.defineRule(r);
-		});
-
+		}, this);
 		// COLLECT SYMBOLS: RULES, ACTIONS, TERMINALS, ...
 		var collector = new SymbolCollector(this.g);
 		collector.process(this.g.ast);
@@ -1454,6 +1497,7 @@ SemanticPipeline.prototype={
 		return false;
 	},
 	assignTokenTypes:function( g, tokensDefs, tokenIDs, terminals){
+		debugger;
 		tokensDefs.forEach(function(alias){
 			if (g.getTokenType(alias.text) != Token.INVALID_TYPE) {
 				g.tool.errMgr.grammarError('TOKEN_NAME_REASSIGNMENT', g.fileName, alias.token, alias.text);
@@ -1482,8 +1526,8 @@ SemanticPipeline.prototype={
 			}
 		}, this);
 
-		g.tool.log("semantics", "tokens="+g.tokenNameToTypeMap);
-        g.tool.log("semantics", "strings="+g.stringLiteralToTypeMap);
+		g.tool.log("semantics", "tokens="+ util.inspect(g.tokenNameToTypeMap));
+        g.tool.log("semantics", "strings="+ util.inspect(g.stringLiteralToTypeMap));
 	}
 };
 
@@ -1503,9 +1547,9 @@ ErrorManager.prototype ={
 		console.info(this._msg(etype, fileName, token, arg));
 	},
 	_msg:function(etype, fileName, token, arg){
-		var args = arguments.slice(4);
-		return 'Error '+ etype + ', file '+ fileName + ', ' + util.inspect(token)+
-			args.join('\n');
+		var args = Array.prototype.slice.call(arguments, 3);
+		return 'Error '+ etype + ', file '+ fileName + ', ' + token +
+			' text: '+ args;
 	}
 };
 module.exports = Tool;

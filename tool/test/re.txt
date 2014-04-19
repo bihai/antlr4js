@@ -1,0 +1,1248 @@
+{
+  "type": 24,
+  "grammarType": "LEXER",
+  "chr": [
+    {
+      "type": "ID",
+      "text": "LessLexer"
+    },
+    {
+      "type": "RULES",
+      "chr": [
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "ID"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "POSITIVE_CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "BLOCK",
+                                  "chr": [
+                                    [
+                                      {
+                                        "type": "ALT",
+                                        "chr": [
+                                          {
+                                            "type": "NOT",
+                                            "text": "~",
+                                            "chr": [
+                                              {
+                                                "type": "NOT",
+                                                "chr": [
+                                                  {
+                                                    "type": "LEXER_CHAR_SET",
+                                                    "text": "[@{}:; \\r\\n\\t]"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "RULE_NAME"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": "@",
+                      "chr": []
+                    },
+                    {
+                      "type": "TOKEN_REF",
+                      "text": "ID",
+                      "chr": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "STRING_LITERAL"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "BLOCK",
+                      "chr": [
+                        [
+                          {
+                            "type": "ALT",
+                            "chr": [
+                              {
+                                "type": "STRING_LITERAL",
+                                "text": "\"",
+                                "chr": []
+                              },
+                              {
+                                "type": "TOKEN_REF",
+                                "text": "DOUBLE_STRING_CHARACTERS",
+                                "chr": []
+                              },
+                              {
+                                "type": "STRING_LITERAL",
+                                "text": "\"",
+                                "chr": []
+                              }
+                            ]
+                          },
+                          {
+                            "type": "ALT",
+                            "chr": [
+                              {
+                                "type": "STRING_LITERAL",
+                                "text": "\\'",
+                                "chr": []
+                              },
+                              {
+                                "type": "TOKEN_REF",
+                                "text": "SINGLE_STRING_CHARACTERS",
+                                "chr": []
+                              },
+                              {
+                                "type": "STRING_LITERAL",
+                                "text": "\\'",
+                                "chr": []
+                              }
+                            ]
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "DOUBLE_STRING_CHARACTERS"
+            },
+            {
+              "type": "RULEMODIFIERS",
+              "chr": [
+                {
+                  "type": "FRAGMENT",
+                  "text": "fragment"
+                }
+              ]
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "BLOCK",
+                                  "chr": [
+                                    [
+                                      {
+                                        "type": "ALT",
+                                        "chr": [
+                                          {
+                                            "type": "NOT",
+                                            "text": "~",
+                                            "chr": [
+                                              {
+                                                "type": "SET",
+                                                "chr": [
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\""
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\\\"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\n"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\r"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2028"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2029"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "ALT",
+                                        "chr": [
+                                          {
+                                            "type": "STRING_LITERAL",
+                                            "text": "\\\\",
+                                            "chr": []
+                                          },
+                                          {
+                                            "type": "NOT",
+                                            "text": "~",
+                                            "chr": [
+                                              {
+                                                "type": "SET",
+                                                "chr": [
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\n"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\r"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2028"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2029"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "SINGLE_STRING_CHARACTERS"
+            },
+            {
+              "type": "RULEMODIFIERS",
+              "chr": [
+                {
+                  "type": "FRAGMENT",
+                  "text": "fragment"
+                }
+              ]
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "BLOCK",
+                                  "chr": [
+                                    [
+                                      {
+                                        "type": "ALT",
+                                        "chr": [
+                                          {
+                                            "type": "NOT",
+                                            "text": "~",
+                                            "chr": [
+                                              {
+                                                "type": "SET",
+                                                "chr": [
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\'"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\\\"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\n"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\r"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2028"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2029"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "type": "ALT",
+                                        "chr": [
+                                          {
+                                            "type": "STRING_LITERAL",
+                                            "text": "\\\\",
+                                            "chr": []
+                                          },
+                                          {
+                                            "type": "NOT",
+                                            "text": "~",
+                                            "chr": [
+                                              {
+                                                "type": "SET",
+                                                "chr": [
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\n"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\r"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2028"
+                                                  },
+                                                  {
+                                                    "type": "STRING_LITERAL",
+                                                    "text": "\\u2029"
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "WHITE_SPACE"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "LEXER_ALT_ACTION",
+                  "chr": [
+                    {
+                      "type": "ALT",
+                      "chr": [
+                        {
+                          "type": "POSITIVE_CLOSURE",
+                          "chr": [
+                            {
+                              "type": "BLOCK",
+                              "chr": [
+                                {
+                                  "type": "ALT",
+                                  "chr": [
+                                    {
+                                      "type": "BLOCK",
+                                      "chr": [
+                                        [
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\r",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\n",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\t",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\u000b",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": " ",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\u00a0",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "TOKEN_REF",
+                                                "text": "USP",
+                                                "chr": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "ID",
+                      "text": "skip"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "USP"
+            },
+            {
+              "type": "RULEMODIFIERS",
+              "chr": [
+                {
+                  "type": "FRAGMENT",
+                  "text": "fragment"
+                }
+              ]
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "RANGE",
+                      "text": "..",
+                      "chr": [
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "\\u2000"
+                        },
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "\\u200b"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": "\\u3000",
+                      "chr": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "DocComment"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "LEXER_ALT_ACTION",
+                  "chr": [
+                    {
+                      "type": "ALT",
+                      "chr": [
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "/**",
+                          "chr": []
+                        },
+                        {
+                          "type": "CLOSURE",
+                          "nongreedy": {
+                            "type": "QUESTION",
+                            "text": "?"
+                          },
+                          "chr": [
+                            {
+                              "type": "BLOCK",
+                              "chr": [
+                                {
+                                  "type": "ALT",
+                                  "chr": [
+                                    {
+                                      "type": "WILDCARD",
+                                      "chr": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "*/",
+                          "chr": []
+                        },
+                        {
+                          "type": "CLOSURE",
+                          "chr": [
+                            {
+                              "type": "BLOCK",
+                              "chr": [
+                                {
+                                  "type": "ALT",
+                                  "chr": [
+                                    {
+                                      "type": "BLOCK",
+                                      "chr": [
+                                        [
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\n",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\r",
+                                                "chr": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "LEXER_ACTION_CALL",
+                      "chr": [
+                        {
+                          "type": "ID",
+                          "text": "channel"
+                        },
+                        {
+                          "type": "ID",
+                          "text": "DOC_CHANN"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "MultiLineComment"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "LEXER_ALT_ACTION",
+                  "chr": [
+                    {
+                      "type": "ALT",
+                      "chr": [
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "/*",
+                          "chr": []
+                        },
+                        {
+                          "type": "CLOSURE",
+                          "nongreedy": {
+                            "type": "QUESTION",
+                            "text": "?"
+                          },
+                          "chr": [
+                            {
+                              "type": "BLOCK",
+                              "chr": [
+                                {
+                                  "type": "ALT",
+                                  "chr": [
+                                    {
+                                      "type": "WILDCARD",
+                                      "chr": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "STRING_LITERAL",
+                          "text": "*/",
+                          "chr": []
+                        },
+                        {
+                          "type": "CLOSURE",
+                          "chr": [
+                            {
+                              "type": "BLOCK",
+                              "chr": [
+                                {
+                                  "type": "ALT",
+                                  "chr": [
+                                    {
+                                      "type": "BLOCK",
+                                      "chr": [
+                                        [
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\n",
+                                                "chr": []
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "type": "ALT",
+                                            "chr": [
+                                              {
+                                                "type": "STRING_LITERAL",
+                                                "text": "\\r",
+                                                "chr": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "LEXER_ACTION_CALL",
+                      "chr": [
+                        {
+                          "type": "ID",
+                          "text": "channel"
+                        },
+                        {
+                          "type": "ID",
+                          "text": "DOC_CHANN"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "TOKEN_REF",
+              "text": "ANYCHAR"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "WILDCARD",
+                      "chr": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+{
+  "type": 24,
+  "grammarType": "PARSER",
+  "chr": [
+    {
+      "type": "ID",
+      "text": "LessParser"
+    },
+    {
+      "type": "RULES",
+      "chr": [
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "cssfile"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "RULE_REF",
+                                  "text": "cssUnit"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "RULE_REF",
+                                  "text": "cssRule"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "cssRule"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "TOKEN_REF",
+                      "text": "RULE_NAME"
+                    },
+                    {
+                      "type": "CLOSURE",
+                      "nongreedy": {
+                        "type": "QUESTION",
+                        "text": "?"
+                      },
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "NOT",
+                                  "text": "~",
+                                  "chr": [
+                                    {
+                                      "type": "SET",
+                                      "chr": [
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": ";"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "OPTIONAL",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "STRING_LITERAL",
+                                  "text": "{"
+                                },
+                                {
+                                  "type": "CLOSURE",
+                                  "chr": [
+                                    {
+                                      "type": "BLOCK",
+                                      "chr": [
+                                        {
+                                          "type": "ALT",
+                                          "chr": [
+                                            {
+                                              "type": "RULE_REF",
+                                              "text": "style"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "STRING_LITERAL",
+                                  "text": "}"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "STRING_LITERAL",
+                                  "text": ":"
+                                },
+                                {
+                                  "type": "RULE_REF",
+                                  "text": "lessValue"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": ";"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "lessValue"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "POSITIVE_CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "NOT",
+                                  "text": "~",
+                                  "chr": [
+                                    {
+                                      "type": "SET",
+                                      "chr": [
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": ";"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "cssUnit"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "RULE_REF",
+                      "text": "selector"
+                    },
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": "{"
+                    },
+                    {
+                      "type": "CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "RULE_REF",
+                                  "text": "cssUnit"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "RULE_REF",
+                                  "text": "style"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": "}"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "selector"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "POSITIVE_CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "NOT",
+                                  "text": "~",
+                                  "chr": [
+                                    {
+                                      "type": "SET",
+                                      "chr": [
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": "{"
+                                        },
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": "}"
+                                        },
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": ";"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "RULE",
+          "chr": [
+            {
+              "type": "RULE_REF",
+              "text": "style"
+            },
+            {
+              "type": "BLOCK",
+              "chr": [
+                {
+                  "type": "ALT",
+                  "chr": [
+                    {
+                      "type": "POSITIVE_CLOSURE",
+                      "chr": [
+                        {
+                          "type": "BLOCK",
+                          "chr": [
+                            {
+                              "type": "ALT",
+                              "chr": [
+                                {
+                                  "type": "NOT",
+                                  "text": "~",
+                                  "chr": [
+                                    {
+                                      "type": "SET",
+                                      "chr": [
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": "{"
+                                        },
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": "}"
+                                        },
+                                        {
+                                          "type": "STRING_LITERAL",
+                                          "text": ";"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "STRING_LITERAL",
+                      "text": ";"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

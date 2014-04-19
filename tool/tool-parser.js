@@ -300,6 +300,7 @@ function nextToken(){
 	if(tk != EOF && tk.type == null){
 		throw mischar(tk.text);
 	}
+	tk.token = 'line: ' + lineno;
 	//console.log("token: "+ util.inspect(tk));
 	return tk;
 }
