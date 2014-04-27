@@ -12,5 +12,5 @@ var parserAST = ps().createAST(fs.readFileSync('LessParser.ga', {encoding:'utf-8
 console.log(JSON.stringify(parserAST, null, '  '));
  */
 
-var tool = new Tool(['LessLexer.ga', 'LessParser.ga']);
+var tool = new Tool(['LessLexer.ga']);
 tool.processGrammarsOnCommandLine();

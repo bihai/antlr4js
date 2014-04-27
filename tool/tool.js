@@ -5,10 +5,14 @@ var Graph = misc.Graph;
 var MultiMap = misc.MultiMap;
 var IntervalSet = misc.IntervalSet;
 var OrderedHashMap = misc.OrderedHashMap;
-var LinkedHashMap = OrderedHashMap;
+var LinkedHashMap = misc.LinkedHashMap;
 var Utils = misc.Utils;
-var ANTLRParser = require('./constants.js').ANTLRParser;
+var MurmurHash = misc.MurmurHash;
+var cnst = require('./constants.js');
+var ANTLRParser = cnst.ANTLRParser,
+	Token = cnst.Token;
 var grammarParser = require('./tool-parser.js');
+var rt = require('./runtime.js'); 
 var _A = ANTLRParser,
 	UUID_COUNT = 1;
 
@@ -150,7 +154,8 @@ AST={
 			var type = AST.type(node);
 			var p = node.parent;
 			//delete node.parent;
-			callback(node, type, p);
+			if(callback(node, type, p))
+				break;
 			
 			if ( node.chr ==null ) continue;
 			for(var i=0,l=node.chr.length; i<l; i++){
@@ -218,14 +223,6 @@ AST.Token.prototype={
 	getLine:function(){
 		return this.line;
 	}
-};
-var Token ={
-	INVALID_TYPE:0,
-    EPSILON:-2,
-	MIN_USER_TOKEN_TYPE:1,
-    EOF: -1,//IntStream.EOF;
-	DEFAULT_CHANNEL: 0,
-	HIDDEN_CHANNEL:1
 };
 
 var TreePatternLexer = (function(){
@@ -596,7 +593,36 @@ Grammar.prototype={
 		return this.maxTokenType;
 	},
 	importTokensFromTokensFile:function(){
-		
+		var vocab = this.getOptionString("tokenVocab");
+		if ( vocab!=null ) {
+			var vparser = new TokenVocabParser(this.tool, vocab);
+			var tokens = vparser.load();
+			this.tool.log("grammar", "tokens=" + tokens);
+			for(var t in tokens){
+			//for (String t : tokens.keySet()) {
+				if ( t.charAt(0)=='\'' ) this.defineStringLiteral(t, tokens[t]);
+				else this.defineTokenName(t, tokens[t]);
+			}
+		}
+	},
+	getOptionString:function(key){
+		//return this.ast.getOptionString(key)
+		var options = null;
+		this.ast.chr.some(function(node){
+				if(AST.isType(node.type, 'OPTIONS')){
+					options = node;
+					return true;
+				}
+				return false;
+		}, this);
+		if(options){
+			options.chr.some(function(node){
+					if(node.type == ANTLRParser.ASSIGN && node.chr[0].text == key){
+						return true;
+					}
+					return false;
+			}, this);
+		}
 	},
 	getOutermostGrammar:function() {
         if ( this.parent==null ) return this;
@@ -621,6 +647,9 @@ Grammar.prototype={
 		var i = (I!=null)? I : Token.INVALID_TYPE;
 		//tool.log("grammar", "grammar type "+type+" "+tokenName+"->"+i);
 		return i;
+	},
+	getMaxTokenType:function() {
+		return this.typeToTokenList.length - 1; // don't count 0 (invalid)
 	}
 };
 function LexerGrammar(tool, ast){
@@ -637,6 +666,11 @@ mixin(LexerGrammar.prototype,{
 		this.modes.map(r.mode, r);
 	}
 });
+
+function TokenVocabParser(){
+	//todo
+}
+
 
 function Tool(args){
 	this.grammarFiles = [];
@@ -743,7 +777,6 @@ Tool.prototype={
 		transform.process();
 		// TODO: deal with Combined grammar
 		this.processNonCombinedGrammar(g, gencode);
-		console.log(util.inspect(g));
 	},
 	processNonCombinedGrammar:function(g, gencode){
 		if ( g.ast==null || g.ast.hasErrors ) return;
@@ -757,13 +790,13 @@ Tool.prototype={
 		sem.process();
 		if ( this.errMgr.getNumErrors()>prevErrors ) return;
 		
-		/* Todo
+		
 		var factory = null;
 		if ( g.isLexer() )
 			factory = new LexerATNFactory(g);
 		else factory = new ParserATNFactory(g);
 		g.atn = factory.createATN();
-
+		/* 
 		if ( this.generate_ATN_dot ) generateATNs(g);
 
 		// PERFORM GRAMMAR ANALYSIS ON ATN: BUILD DECISION DFAs
@@ -855,6 +888,7 @@ GrammarTransformPipeline.prototype={
         this.tool.log("grammar", "before: "+ util.inspect(root));
 
         this.integrateImportedGrammars(this.g);
+        //todo:
 		//reduceBlocksToSets(root);
         //expandParameterizedLoops(root);
 
@@ -997,6 +1031,7 @@ function Rule(g, name, ast, numberOfAlts){
 	this.numberOfAlts = numberOfAlts;
 	this.actions = [];
 	this.actionIndex = -1;
+	this.index = 0;
 	this.alt = []; // 1..n
 	for (var i=1; i<=numberOfAlts; i++)
 		this.alt[i] = new Alternative(this, i);
@@ -1050,6 +1085,12 @@ Rule.prototype={
 		return false;
 	}
 };
+
+function LeftRecursiveRule(){
+}
+
+LeftRecursiveRule.prototype = Object.create(Rule.prototype);
+
 function Alternative(r, altNum) {
 	this.actions = [];
 	this.rule = r; this.altNum = altNum;
@@ -1550,6 +1591,143 @@ ErrorManager.prototype ={
 		var args = Array.prototype.slice.call(arguments, 3);
 		return 'Error '+ etype + ', file '+ fileName + ', ' + token +
 			' text: '+ args;
+	}
+};
+
+var ATNType = {
+	LEXER: 1,
+	PARSER: 2
+};
+
+function ParserATNFactory(g){
+	//g, atn, currentRule, currentOuterAlt
+	if (g == null) {
+		throw new Error("Null g");
+	}
+	this.g = g;
+	this.preventEpsilonClosureBlocks = [];
+	this.preventEpsilonOptionalBlocks = [];
+    
+	var atnType = g instanceof LexerGrammar ? ATNType.LEXER : ATNType.PARSER;
+	var maxTokenType = g.getMaxTokenType();
+	this.atn = new rt.ATN(atnType, maxTokenType);
+}
+ParserATNFactory.prototype = {
+	newState:function(nodeTypeConst, node) {
+		var cause;
+		try {
+			var s = new nodeTypeConst();
+			if ( this.currentRule==null ) s.setRuleIndex(-1);
+			else s.setRuleIndex(this.currentRule.index);
+			this.atn.addState(s);
+			return s;
+		} catch (ex) {
+			cause = ex;
+		} 
+
+		var message = util.format("Could not create %s of type %s.", 'ATNState', nodeTypeConst.prototype.className);
+		throw new Error('UnsupportedOperation - '+ message+ ' : '+ cause);
+	},
+	_createATN:function(rules) {
+		this.createRuleStartAndStopATNStates();
+
+		var adaptor = new GrammarASTAdaptor();
+		for (var i = 0,l = rules.length; i<l; i++) {
+			var r = rules[i];
+			// find rule's block
+			var blk = AST.getFirstChildWithType(r.ast, ANTLRParser.BLOCK);
+			var nodes = new CommonTreeNodeStream(adaptor,blk);
+			var b = new ATNBuilder(nodes,this);
+			try {
+				this.setCurrentRuleName(r.name);
+				var h = b.ruleBlock(null);
+				this.rule(r.ast, r.name, h);
+			}
+			catch ( re) {
+				ErrorManager.fatalInternalError("bad grammar AST structure", re);
+			}
+		}
+	},
+	createRuleStartAndStopATNStates:function() {
+		this.atn.ruleToStartState = new Array(this.g.rules.size());
+		this.atn.ruleToStopState = new Array(this.g.rules.size());
+		this.g.rules.values().forEach(function(r){
+			var start = this.newState(rt.RuleStartState, r.ast);
+			var stop = this.newState(rt.RuleStopState, r.ast);
+			start.stopState = stop;
+			start.isPrecedenceRule = r instanceof LeftRecursiveRule;
+			start.setRuleIndex(r.index);
+			stop.setRuleIndex(r.index);
+			this.atn.ruleToStartState[r.index] = start;
+			this.atn.ruleToStopState[r.index] = stop;
+		}, this);
+	}
+};
+function LexerATNFactory(g){
+	ParserATNFactory.call(this, g);
+	var language = g.getOptionString("language");
+	var gen = new CodeGenerator(g.tool, null, language);
+	this.codegenTemplates = gen.getTemplates();
+}
+LexerATNFactory.prototype = Object.create(ParserATNFactory.prototype);
+mixin(LexerATNFactory.prototype, {
+	createATN:function(){
+		// BUILD ALL START STATES (ONE PER MODE)
+		var modes = this.g.modes.keySet();
+		for (var modeName in modes) {
+			// create s0, start state; implied Tokens rule node
+			var startState =
+				this.newState(rt.TokensStartState, null);
+			this.atn.modeNameToStartState.put(modeName, startState);
+			this.atn.modeToStartState.push(startState);
+			this.atn.defineDecisionState(startState);
+		}
+
+		// INIT ACTION, RULE->TOKEN_TYPE MAP
+		this.atn.ruleToTokenType = new Array(this.g.rules.size());
+		this.g.rules.values().forEach(function(r) {
+			this.atn.ruleToTokenType[r.index] = this.g.getTokenType(r.name);
+		}, this);
+		//console.log('atn = %s', util.inspect(this.atn));
+		// CREATE ATN FOR EACH RULE
+		this._createATN(this.g.rules.values());
+		/* 
+		atn.lexerActions = new LexerAction[indexToActionMap.size()];
+		for (Map.Entry<Integer, LexerAction> entry : indexToActionMap.entrySet()) {
+			atn.lexerActions[entry.getKey()] = entry.getValue();
+		}
+
+		// LINK MODE START STATE TO EACH TOKEN RULE
+		for (String modeName : modes) {
+			List<Rule> rules = ((LexerGrammar)g).modes.get(modeName);
+			TokensStartState startState = atn.modeNameToStartState.get(modeName);
+			for (Rule r : rules) {
+				if ( !r.isFragment() ) {
+					RuleStartState s = atn.ruleToStartState[r.index];
+					epsilon(startState, s);
+				}
+			}
+		}
+
+		ATNOptimizer.optimize(g, atn);
+		return atn; */
+	}
+});
+
+function CodeGenerator(tool, g, language){
+	this.lineWidth = 72;
+	this.g = g;
+	this.tool = tool;
+	this.language = language != null ? language : CodeGenerator.DEFAULT_LANGUAGE;
+}
+mixin(CodeGenerator, {
+	DEFAULT_LANGUAGE: 'Javascript',
+	VOCAB_FILE_EXTENSION: '.tokens',
+	TEMPLATE_ROOT: ''
+});
+CodeGenerator.prototype = {
+	getTemplates:function(){
+		return ['todo template'];
 	}
 };
 module.exports = Tool;

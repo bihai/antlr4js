@@ -40,9 +40,14 @@ OrderedHashMap.prototype={
 		return uuid(key) in this.map;
 	},
 	put:function(key, value) {
-		this.map[uuid(key)] = value;
-		this.elements.push(key);
-		this._size++;
+		var k = uuid(key);
+		var old = this.map[k];
+		this.map[k] = value;
+		if(k in this.map){
+			this.elements.push(key);
+			this._size++;
+		}
+		return old;
 	},
 	putAll:function(m) {
 		for(k in m){
@@ -70,7 +75,7 @@ OrderedHashMap.prototype={
 		this.size--;
 	}
 };
-exports.OrderedHashMap = OrderedHashMap;
+exports.OrderedHashMap = exports.LinkedHashMap = OrderedHashMap;
 
 var Utils={
 	capitalize:function(s){
@@ -179,6 +184,9 @@ exports.MultiMap = (function(){
 			for(var k in this.obj)
 				v.push(this.obj[k]);
 			return v;
+		},
+		keySet:function(){
+			return this.obj;
 		}
 	};
 	return MultiMap;
@@ -321,6 +329,22 @@ exports.MultiMap = (function(){
 			// just add it
 			intervals.push(addition);
         },
+        addAll:function( set) {
+			if ( set==null ) {
+				return this;
+			}
+			if ( !(set instanceof IntervalSet) ) {
+				throw new Error("can't add non IntSet ("+ set + ") to IntervalSet");
+			}
+			var other = set;
+			// walk set and add each interval
+			var n = other.intervals.length;
+			for (var i = 0; i < n; i++) {
+				var I = other.intervals[i];
+				this.add(I.a,I.b);
+			}
+			return this;
+		},
         contains:function(el) {
 			var n = this.intervals.length;
 			for (var i = 0; i < n; i++) {
@@ -338,6 +362,45 @@ exports.MultiMap = (function(){
 		},
 		isNil:function() {
 			return this.intervals==null || this.intervals.length === 0;
+		},
+		remove:function( el) {
+			if ( this.readonly ) throw new Error("can't alter readonly IntervalSet");
+			var n = this.intervals.length;
+			for (var i = 0; i < n; i++) {
+				var I = this.intervals[i];
+				var a = I.a;
+				var b = I.b;
+				if ( el<a ) {
+					break; // list is sorted and el is before this interval; not here
+				}
+				// if whole interval x..x, rm
+				if ( el==a && el==b ) {
+					this.intervals.splice(i, 1);
+					break;
+				}
+				// if on left edge x..b, adjust left
+				if ( el==a ) {
+					I.a++;
+					break;
+				}
+				// if on right edge a..x, adjust right
+				if ( el==b ) {
+					I.b--;
+					break;
+				}
+				// if in middle a..x..b, split interval
+				if ( el>a && el<b ) { // found in this interval
+					var oldb = I.b;
+					I.b = el-1;      // [a..x-1]
+					this.add(el+1, oldb); // add [x+1..b]
+				}
+			}
+		},
+		isReadonly:function() {
+			return this.readonly;
+		},
+		setReadonly:function(readonly) {
+			this.readonly = readonly;
 		}
     };
 	exports.IntervalSet = IntervalSet;
@@ -422,4 +485,263 @@ exports.MultiMap = (function(){
 		}
 	};
 	exports.BitSet = BitSet;
+})();
+
+function MurmurHash(){
+}
+MurmurHash.DEFAULT_SEED = 0;
+MurmurHash.initialize = function(seed){
+	if(seed === undefined){
+		return initialize(MurmurHash.DEFAULT_SEED);
+	}
+	return seed;
+}
+MurmurHash.update = function( hash, value) {
+	if(typeof(value) == 'object')
+		value = value != null ? value.hashCode() : 0;
+	var c1 = 0xCC9E2D51;
+	var c2 = 0x1B873593;
+	var r1 = 15;
+	var r2 = 13;
+	var m = 5;
+	var n = 0xE6546B64;
+
+	var k = value;
+	k = k * c1;
+	k = (k << r1) | (k >>> (32 - r1));
+	k = k * c2;
+
+	hash = hash ^ k;
+	hash = (hash << r2) | (hash >>> (32 - r2));
+	hash = hash * m + n;
+
+	return hash;
+};
+
+MurmurHash.finish = function( hash,  numberOfWords) {
+	hash = hash ^ (numberOfWords * 4);
+	hash = hash ^ (hash >>> 16);
+	hash = hash * 0x85EBCA6B;
+	hash = hash ^ (hash >>> 13);
+	hash = hash * 0xC2B2AE35;
+	hash = hash ^ (hash >>> 16);
+	return hash;
+};
+MurmurHash.prototype = {
+	hashCode:function( data, seed) {
+		var hash = MurmurHash.initialize(seed);
+		for (var i=0,l=data.length; i<l; i++) {
+			var value = data[i];
+			hash = MurmurHash.update(hash, value);
+		}
+
+		hash = MurmurHash.finish(hash, data.length);
+		return hash;
+	}
+};
+exports.MurmurHash = MurmurHash;
+
+(function(){
+function SimpleHashMap(){
+	this.table = {};
+	this.length = 0;
+}
+exports.HashMap = SimpleHashMap;
+//var __opts = Object.prototype.toString;
+//function isArray(){
+//	return __opts.apply(o) == '[object Array]’;
+//}
+SimpleHashMap.prototype={
+	put:function(key, value){
+		var hashStr = this.hash(key);
+		var entry = this.table[hashStr];
+		if(entry){
+			do{
+				if( (key == null && entry.k == null) || key.equals(entry.k)){
+					var v = entry.v;
+					entry.v = value;
+					return v;
+				}
+				var prev = entry;
+				entry = entry.next;
+				
+			}while(entry != null);
+			prev.next = {k: key, v: value};
+			this.length++;
+			return null;
+		}else{
+			this.table[hashStr] = {k: key, v: value};
+			this.length++;
+			return null;
+		}
+	},
+	get:function(key){
+		var hashStr = this.hash(key);
+		var entry = this.table[hashStr];
+		if(entry){
+			do{
+				if( (key == null && entry.k == null) || key.equals(entry.k)){
+					return entry.v;
+				}
+				var prev = entry;
+				entry = entry.next;
+				
+			}while(entry != null);
+			return null;
+		}
+		return null;
+	},
+	containsKey:function(o){
+		return this.get(o) != null;
+	},
+	remove:function(o){
+		var hashStr = this.hash(o);
+		var entry = this.table[hashStr], prev = null;
+		if(entry){
+			do{
+				if( (o == null && entry.k == null) || o.equals(entry.k)){
+					if(prev == null){
+						if(entry.next)
+							this.table[hashStr] = entry.next;
+						else
+							delete this.table[hashStr];
+					}else{
+						prev.next = entry.next;
+					}
+					this.length--;
+					return entry.v;
+				}
+				prev = entry;
+				entry = entry.next;
+				
+			}while(entry != null);
+			return null;
+		}
+		return null;
+	},
+	clear:function(){
+		this.table = {};
+		this.length = 0;
+	},
+	size:function(){
+		return this.length;
+		
+	},
+	hash:function(o){
+		if(o == null)
+			return 'null';
+		else if(o.hashCode)
+			return o.hashCode() + '';
+		else
+			throw new Error('HashMap only allow key object with hashCode() method');
+	}
+};
+
+})();
+/**
+Java like Hashmap
+*/
+(function(){
+	MAXIMUM_CAPACITY = 1<<30;
+	DEFAULT_INITIAL_CAPACITY = 1 << 4;
+	DEFAULT_LOAD_FACTOR = 0.75;
+	EMPTY_TABLE = [];
+	
+function HashMap(){
+	this.table = [];
+	this.size = 0;
+	this.modCount = 0;
+	this.loadFactor = DEFAULT_LOAD_FACTOR;
+	this.threshold = DEFAULT_INITIAL_CAPACITY;
+}
+var Integer = {};
+Integer.highestOneBit = function( i) {
+        // HD, Figure 3-1
+        i |= (i >>  1);
+        i |= (i >>  2);
+        i |= (i >>  4);
+        i |= (i >>  8);
+        i |= (i >> 16);
+        return i - (i >>> 1);
+};
+
+Integer.bitCount = function(i) {
+        // HD, Figure 5-2
+        i = i - ((i >>> 1) & 0x55555555);
+        i = (i & 0x33333333) + ((i >>> 2) & 0x33333333);
+        i = (i + (i >>> 4)) & 0x0f0f0f0f;
+        i = i + (i >>> 8);
+        i = i + (i >>> 16);
+        return i & 0x3f;
+}
+HashMap.prototype = {
+	put:function(key, value){
+		if (this.table.length == 0) {
+            this.inflateTable(this.threshold);
+        }
+		if (key == null)
+            return this.putForNullKey(value);
+        var hash = hash(key);
+        var i = indexFor(hash, table.length);
+        for (e = table[i]; e != null; e = e.next) {
+            var k;
+            if (e.hash == hash && ((k = e.key) == key || key.equals(k))) {
+                var oldValue = e.value;
+                e.value = value;
+                e.recordAccess(this);
+                return oldValue;
+            }
+        }
+
+        this.modCount++;
+        addEntry(hash, key, value, i);
+        return null;
+	},
+	putForNullKey:function(value) {
+		if(this.table.length > 0)
+			for (var e = this.table[0]; e != null; e = e.next) {
+				if (e.key == null) {
+					var oldValue = e.value;
+					e.value = value;
+					//e.recordAccess(this);
+					return oldValue;
+				}
+			}
+        this.modCount++;
+        this.addEntry(0, null, value, 0);
+        return null;
+    },
+    addEntry:function( hash, key, value, bucketIndex) {
+        if ((size >= threshold) && (null != this.table[bucketIndex])) {
+            resize(2 * table.length);
+            hash = (null != key) ? this.hash(key) : 0;
+            bucketIndex = indexFor(hash, this.table.length);
+        }
+
+        this.createEntry(hash, key, value, bucketIndex);
+    },
+    createEntry:function(hash, key, value, bucketIndex) {
+        var e = table[bucketIndex];
+        table[bucketIndex] = new Entry(hash, key, value, e);
+        size++;
+    },
+    inflateTable:function(toSize){
+    	var capacity = this._roundUpToPowerOf2(toSize);
+    	threshold = Math.floor(Math.min(capacity * this.loadFactor, MAXIMUM_CAPACITY + 1));
+        while(this.table.length < capacity)
+        	this.table.push(null);
+        //todo: initHashSeedAsNeeded(capacity);
+    },
+    _roundUpToPowerOf2:function( number) {
+        // assert number >= 0 : "number must be non-negative";
+        var rounded = number >= MAXIMUM_CAPACITY ? MAXIMUM_CAPACITY
+                : (rounded = Integer.highestOneBit(number)) != 0
+                    ? (Integer.bitCount(number) > 1) ? rounded << 1 : rounded
+                    : 1;
+        
+        return rounded;
+    }
+};
+
+//exports.HashMap = HashMap;
 })();
