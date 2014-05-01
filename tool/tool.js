@@ -33,6 +33,12 @@ if (typeof Object.create != 'function') {
         };
     })();
 }
+function extend(subclass, superclass, override){
+	subclass.prototype = Object.create(superclass.prototype);
+	subclass._super = superclass.prototype;
+	subclass.superclass = superclass;
+	mixin(subclass.prototype, override);
+}
 /**
 AST sample:
 {
@@ -1087,6 +1093,7 @@ Rule.prototype={
 };
 
 function LeftRecursiveRule(){
+	//todo
 }
 
 LeftRecursiveRule.prototype = Object.create(Rule.prototype);
@@ -1613,6 +1620,10 @@ function ParserATNFactory(g){
 	this.atn = new rt.ATN(atnType, maxTokenType);
 }
 ParserATNFactory.prototype = {
+	Handle:function(left, right){
+		this.left = left;
+		this.right = right;
+	},
 	newState:function(nodeTypeConst, node) {
 		var cause;
 		try {
@@ -1636,11 +1647,11 @@ ParserATNFactory.prototype = {
 			var r = rules[i];
 			// find rule's block
 			var blk = AST.getFirstChildWithType(r.ast, ANTLRParser.BLOCK);
-			var nodes = new CommonTreeNodeStream(adaptor,blk);
-			var b = new ATNBuilder(nodes,this);
+			//var nodes = new CommonTreeNodeStream(adaptor,blk);
+			var b = new ATNBuilder(this);
 			try {
 				this.setCurrentRuleName(r.name);
-				var h = b.ruleBlock(null);
+				var h = b.ruleBlock(null, blk);
 				this.rule(r.ast, r.name, h);
 			}
 			catch ( re) {
@@ -1661,6 +1672,125 @@ ParserATNFactory.prototype = {
 			this.atn.ruleToStartState[r.index] = start;
 			this.atn.ruleToStopState[r.index] = stop;
 		}, this);
+	},
+	block:function(blkAST, ebnfRoot, /*[]*/alts) {
+		if ( ebnfRoot==null ) {
+			if ( alts.length==1 ) {
+				var h = alts[0];
+				blkAST.atnState = h.left;
+				return h;
+			}
+			var start = this.newState(rt.BasicBlockStartState, blkAST);
+			if ( alts.length>1 ) this.atn.defineDecisionState(start);
+			return this.makeBlock(start, blkAST, alts);
+		}
+		switch ( ebnfRoot.type ) {
+			case ANTLRParser.OPTIONAL :
+				var start = this.newState(rt.BasicBlockStartState, blkAST);
+				atn.defineDecisionState(start);
+				var h = this.makeBlock(start, blkAST, alts);
+				return this.optional(ebnfRoot, h);
+			case ANTLRParser.CLOSURE :
+				var star = newState(rt.StarBlockStartState, ebnfRoot);
+				if ( alts.length > 1 ) this.atn.defineDecisionState(star);
+				h = this.makeBlock(star, blkAST, alts);
+				return this.star(ebnfRoot, h);
+			case ANTLRParser.POSITIVE_CLOSURE :
+				var plus = newState(rt.PlusBlockStartState, ebnfRoot);
+				if ( alts.length > 1 ) this.atn.defineDecisionState(plus);
+				h = this.makeBlock(plus, blkAST, alts);
+				return this.plus(ebnfRoot, h);
+		}
+		return null;
+	},
+	
+	makeBlock:function(start, blkAST, alts) {
+		var end = this.newState(rt.BlockEndState, blkAST);
+		start.endState = end;
+		alts.forEach (function(alt) {
+			// hook alts up to decision block
+			this.epsilon(start, alt.left);
+			this.epsilon(alt.right, end);
+			// no back link in ATN so must walk entire alt to see if we can
+			// strip out the epsilon to 'end' state
+			var opt = new TailEpsilonRemover(atn);
+			opt.visit(alt.left);
+		}, this);
+		var h = new this.Handle(start, end);
+//		FASerializer ser = new FASerializer(g, h.left);
+//		System.out.println(blkAST.toStringTree()+":\n"+ser);
+		blkAST.atnState = start;
+		return h;
+	},
+	
+	star:function(starAST, elem){
+		var blkStart = elem.left;
+		var blkEnd = elem.right;
+		this.preventEpsilonClosureBlocks.push({a:currentRule, b:blkStart, c:blkEnd});
+
+		var entry = this.newState(rt.StarLoopEntryState, starAST);
+		entry.nonGreedy = !starAST._greedy;
+		this.atn.defineDecisionState(entry);
+		var end = this.newState(rt.LoopEndState, starAST);
+		var loop = this.newState(rt.StarLoopbackState, starAST);
+		entry.loopBackState = loop;
+		end.loopBackState = loop;
+
+		var blkAST = starAST.chr[0];
+		if ( starAST._greedy ) {
+			if (this.expectNonGreedy(blkAST)) {
+				this.g.tool.errMgr.grammarError('EXPECTED_NON_GREEDY_WILDCARD_BLOCK',
+					this.g.fileName, starAST.getToken(), starAST.getToken().getText());
+			}
+
+			this.epsilon(entry, blkStart);	// loop enter edge (alt 1)
+			this.epsilon(entry, end);		// bypass loop edge (alt 2)
+		}
+		else {
+			// if not greedy, priority to exit branch; make it first
+			this.epsilon(entry, end);		// bypass loop edge (alt 1)
+			this.epsilon(entry, blkStart);	// loop enter edge (alt 2)
+		}
+		this.epsilon(blkEnd, loop);		// block end hits loop back
+		this.epsilon(loop, entry);		// loop back to entry/exit decision
+
+		starAST.atnState = entry;	// decision is to enter/exit; blk is its own decision
+		return new this.Handle(entry, end);
+	},
+	optional:function(){
+		todo
+	},
+	plus:function(){
+		todo
+	},
+	epsilon:function(){
+		todo
+	},
+	expectNonGreedy:function(blkAST){
+		if ( this.blockHasWildcardAlt(blkAST) ) {
+			return true;
+		}
+
+		return false;
+	},
+	setCurrentRuleName:function(name) {
+		this.currentRule = g.getRule(name);
+	},
+	setCurrentOuterAlt:function(alt){
+		this.currentOuterAlt = alt;
+	},
+	blockHasWildcardAlt:function(block){
+		return block.chr.some(function(alt){
+			if ( !(alt instanceof AltAST) ) return false;
+			AltAST altAST = alt;
+			if ( altAST.getChildCount()==1 ) {
+				Tree e = altAST.getChild(0);
+				if ( e.getType()==ANTLRParser.WILDCARD ) {
+					return true;
+				}
+			}
+			return false;
+		});
 	}
 };
 function LexerATNFactory(g){
@@ -1714,6 +1844,77 @@ mixin(LexerATNFactory.prototype, {
 	}
 });
 
+function ATNBuilder(/*ATNFactory*/factory){
+	this.factory = factory
+}
+
+ATNBuilder.prototype = {
+	ruleBlock:function(ebnfRoot, blockAST){
+		var alts = [], alt = 1;
+		this.factory.setCurrentOuterAlt(alt);
+		blockAST.chr.forEach(function(c){
+			if(AST.isType(c, 'OPTIONS'))
+				return;
+			alts.push(this.alternative(c));
+			this.factory.setCurrentOuterAlt(++alt);
+		}, this);
+		return this.factory.block(blockAST, ebnfRoot, alts)
+	},
+	alternative:function(ast){
+		
+	}
+};
+function ATNVisitor(){
+}
+ATNVisitor.prototype = {
+	visit:function(s){
+		this.visit_(s, {});
+	},
+	visit_:function(s, visited) {
+		if( s.stateNumber in visited) return;
+		//if ( !visited.add(s.stateNumber) ) return;
+		visited[s.stateNumber] = true;
+
+		this.visitState(s);
+		var n = s.getNumberOfTransitions();
+		for (var i=0; i<n; i++) {
+			var t = s.transition(i);
+			this.visit_(t.target, visited);
+		}
+	}
+};
+
+function TailEpsilonRemover(atn){
+	this._atn = atn;
+}
+extend(TailEpsilonRemover, ATNVisitor, {
+	visitState:function(p){
+		if (p.getStateType() == rt.ATNState.BASIC && p.getNumberOfTransitions() == 1) {
+			var q = p.transition(0).target;
+			if (p.transition(0) instanceof rt.RuleTransition) {
+				q = p.transition(0).followState;
+			}
+			if (q.getStateType() == ATNState.BASIC) {
+				// we have p-x->q for x in {rule, action, pred, token, ...}
+				// if edge out of q is single epsilon to block end
+				// we can strip epsilon p-x->q-eps->r
+				var trans = q.transition(0);
+				if (q.getNumberOfTransitions() == 1 && trans.isEpsilon() && !(trans instanceof rt.ActionTransition)) {
+					var r = trans.target;
+					if (r instanceof rt.BlockEndState || r instanceof rt.PlusLoopbackState || r instanceof rt.StarLoopbackState) {
+						// skip over q
+						if (p.transition(0) instanceof rt.RuleTransition) {
+							p.transition(0).followState = r;
+						} else {
+							p.transition(0).target = r;
+						}
+						this._atn.removeState(q);
+					}
+				}
+			}
+		}
+	}
+});
 function CodeGenerator(tool, g, language){
 	this.lineWidth = 72;
 	this.g = g;

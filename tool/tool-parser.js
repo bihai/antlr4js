@@ -1069,17 +1069,17 @@ function ebnfSuffix(){
 		consume();
 		if(lt(1, 'QUESTION'))
 			var nongreedy = consume();
-		return { type:'OPTIONAL', nongreedy:nongreedy};
+		return { type:'OPTIONAL', nongreedy:nongreedy, _greedy:nongreedy == null};
 	}else if(t.type == 'STAR'){
 		consume();
 		if(lt(1, 'QUESTION'))
 			var nongreedy = consume();
-		return { type:'CLOSURE', nongreedy:nongreedy};
+		return { type:'CLOSURE', nongreedy:nongreedy, _greedy:nongreedy == null};
 	}else if(t.type == 'PLUS'){
 		consume();
 		if(lt(1, 'QUESTION'))
 			var nongreedy = consume();
-		return { type:'POSITIVE_CLOSURE', nongreedy:nongreedy};
+		return { type:'POSITIVE_CLOSURE', nongreedy:nongreedy, _greedy:nongreedy == null};
 	}else{
 		throw mismatch([QUESTION, STAR, PLUS]);
 	}

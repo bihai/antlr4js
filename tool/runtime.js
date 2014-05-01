@@ -29,6 +29,12 @@ if (typeof Object.create != 'function') {
         };
     })();
 }
+function extend(subclass, superclass, override){
+	subclass.prototype = Object.create(superclass.prototype);
+	subclass._super = superclass.prototype;
+	subclass.superclass = superclass;
+	mixin(subclass.prototype, override);
+}
 function ATN(grammarType, maxTokenType){
 	this.states = [];
 	this.decisionToState = [];
@@ -235,110 +241,222 @@ return LL1Analyzer;
 })();
 
 (function(){
-var INITIAL_NUM_TRANSITIONS = 4;
-var INVALID_TYPE = 0;
-var BASIC = 1;
-var RULE_START = 2;
-var BLOCK_START = 3;
-var PLUS_BLOCK_START = 4;
-var STAR_BLOCK_START = 5;
-var TOKEN_START = 6;
-var RULE_STOP = 7;
-var BLOCK_END = 8;
-var STAR_LOOP_BACK = 9;
-var STAR_LOOP_ENTRY = 10;
-var PLUS_LOOP_BACK = 11;
-var LOOP_END = 12;
-var INVALID_STATE_NUMBER = -1;
-function ATNState(){
-	this.atn = null;
-	this.stateNumber = INVALID_STATE_NUMBER;
-	this.ruleIndex = 0;
-	this.epsilonOnlyTransitions = false;
-	this.transitions = new Array(INITIAL_NUM_TRANSITIONS);
-	this.nextTokenWithinRule = null;
-}
-ATNState.serializationNames = ["INVALID",
-	"BASIC",
-	"RULE_START",
-	"BLOCK_START",
-	"PLUS_BLOCK_START",
-	"STAR_BLOCK_START",
-	"TOKEN_START",
-	"RULE_STOP",
-	"BLOCK_END",
-	"STAR_LOOP_BACK",
-	"STAR_LOOP_ENTRY",
-	"PLUS_LOOP_BACK",
-	"LOOP_END"];
+	var INITIAL_NUM_TRANSITIONS = 4;
+	var INVALID_TYPE = 0;
+	var BASIC = 1;
+	var RULE_START = 2;
+	var BLOCK_START = 3;
+	var PLUS_BLOCK_START = 4;
+	var STAR_BLOCK_START = 5;
+	var TOKEN_START = 6;
+	var RULE_STOP = 7;
+	var BLOCK_END = 8;
+	var STAR_LOOP_BACK = 9;
+	var STAR_LOOP_ENTRY = 10;
+	var PLUS_LOOP_BACK = 11;
+	var LOOP_END = 12;
+	var INVALID_STATE_NUMBER = -1;
+	
+	function ATNState(){
+		this.atn = null;
+		this.stateNumber = INVALID_STATE_NUMBER;
+		this.ruleIndex = 0;
+		this.epsilonOnlyTransitions = false;
+		this.transitions = new Array(INITIAL_NUM_TRANSITIONS);
+		this.nextTokenWithinRule = null;
+	}
+	mixin(ATNState, {
+		INITIAL_NUM_TRANSITIONS : 4,
+		INVALID_TYPE : 0,
+		BASIC : 1,
+		RULE_START : 2,
+		BLOCK_START : 3,
+		PLUS_BLOCK_START : 4,
+		STAR_BLOCK_START : 5,
+		TOKEN_START : 6,
+		RULE_STOP : 7,
+		BLOCK_END : 8,
+		STAR_LOOP_BACK : 9,
+		STAR_LOOP_ENTRY : 10,
+		PLUS_LOOP_BACK : 11,
+		LOOP_END : 12,
+		INVALID_STATE_NUMBER : -1
+	});
+	exports.ATNState = ATNState;
+	ATNState.serializationNames = ["INVALID",
+		"BASIC",
+		"RULE_START",
+		"BLOCK_START",
+		"PLUS_BLOCK_START",
+		"STAR_BLOCK_START",
+		"TOKEN_START",
+		"RULE_STOP",
+		"BLOCK_END",
+		"STAR_LOOP_BACK",
+		"STAR_LOOP_ENTRY",
+		"PLUS_LOOP_BACK",
+		"LOOP_END"];
+	
+	ATNState.prototype = {
+		hashCode:function() { return this.stateNumber; },
+		equals:function( o) {
+			// are these states same object?
+			if ( o instanceof ATNState ) return this.stateNumber==o.stateNumber;
+			return false;
+		},
+		isNonGreedyExitState:function(){
+			return false;
+		},
+		toString:function(){
+			return this.stateNumber+ '';
+		},
+		getTransitions:function(){
+			return [].concat(this.transitions);
+		},
+		getNumberOfTransitions:function(){
+			return this.transitions.length;
+		},
+		addTransition:function(index, e){
+			if(e === undefined){
+				e = index;
+				this.addTransition(this.transitions.length, e);
+			}
+			if (transitions.length == 0) {
+				this.epsilonOnlyTransitions = e.isEpsilon();
+			}
+			else if (this.epsilonOnlyTransitions != e.isEpsilon()) {
+				console.error("ATN state %d has both epsilon and non-epsilon transitions.\n", this.stateNumber);
+				this.epsilonOnlyTransitions = false;
+			}
+	
+			this.transitions.push(index, e);
+		},
+		transition:function(i){
+			return this.transitions[i];
+		},
+		setTransition:function(i, e){
+			this.transitions[i] = e;
+		},
+		removeTransition:function(index){
+			return this.transitions.splice(index, 1)[0];
+		},
+		onlyHasEpsilonTransitions:function() {
+			return this.epsilonOnlyTransitions;
+		},
+		setRuleIndex:function(ruleIndex) { this.ruleIndex = ruleIndex; }
+	};
+	
+	function DecisionState(){
+		this.decision = -1;
+		this.nonGreedy = false;
+	}
+	extend(DecisionState, ATNState, {
+			className:'DecisionState'
+	});
+	
+	function TokensStartState(){
+	}
+	extend(TokensStartState, DecisionState,{
+		getStateType:function() {
+			return TOKEN_START;
+		},
+		className:'TokensStartState'
+	});
+	exports.TokensStartState = TokensStartState;
+	
+	function RuleStopState(){
+	}
+	extend(RuleStopState, ATNState, {
+		getStateType:function(){
+			return RULE_STOP;
+		},
+		className:'RuleStopState'
+	});
+	exports.RuleStopState = RuleStopState;
+	
+	function RuleStartState(){
+		//public RuleStopState stopState;
+		//public boolean isPrecedenceRule;
+	}
+	
+	extend(RuleStartState, ATNState, {
+		getStateType:function(){
+			return RULE_START;
+		},
+		className:'RuleStartState'
+	});
+	exports.RuleStartState = RuleStartState;
+	
+	function BasicBlockStartState(){
+	}
+	extend(BasicBlockStartState, BlockStartState, {
+		getStateType:function(){
+			return BLOCK_START;
+		},
+		className:'BasicBlockStartState'
+	});
+	exports.BasicBlockStartState = BasicBlockStartState;
+	
+	function StarBlockStartState(){
+	}
+	extend(StarBlockStartState, BlockStartState,{
+		getStateType:function(){
+			return STAR_BLOCK_START;
+		},
+		className:'StarBlockStartState'
+	});
+	
+	function PlusBlockStartState(){
+	}
+	extend(PlusBlockStartState, BlockStartState,{
+		getStateType:function(){
+			return PLUS_BLOCK_START;
+		},
+		className:'PlusBlockStartState'
+	});
+	exports.PlusBlockStartState = PlusBlockStartState;
+	
+	function BlockEndState(){
+	}
+	extend(BlockEndState, ATNState, {
+		getStateType:function(){
+			return BLOCK_END;
+		},
+		className:'BlockEndState'
+	});
+	exports.BlockEndState = BlockEndState;
+	
+	function PlusLoopbackState(){
+	}
+	
+	extend(PlusLoopbackState, DecisionState, {
+		getStateType:function(){
+			return PLUS_LOOP_BACK;
+		},
+		className:'PlusLoopbackState'
+	});
+	exports.PlusLoopbackState = PlusLoopbackState;
+	
+	function StarLoopbackState(){}
+	extend(StarLoopbackState, ATNState, {
+		getStateType:function(){
+			return STAR_LOOP_BACK;
+		},
+		className:'StarLoopbackState'
+	});
+	exports.StarLoopbackState = StarLoopbackState;
 
-ATNState.prototype = {
-	hashCode:function() { return this.stateNumber; },
-	equals:function( o) {
-		// are these states same object?
-		if ( o instanceof ATNState ) return this.stateNumber==o.stateNumber;
-		return false;
-	},
-	isNonGreedyExitState:function(){
-		return false;
-	},
-	toString:function(){
-		return this.stateNumber+ '';
-	},
-	getTransitions:function(){
-		return [].concat(this.transitions);
-	},
-	getNumberOfTransitions:function(){
-		return this.transitions.length;
-	},
-	addTransition:function(index, e){
-		if(e === undefined){
-			e = index;
-			this.addTransition(this.transitions.length, e);
-		}
-		if (transitions.length == 0) {
-			this.epsilonOnlyTransitions = e.isEpsilon();
-		}
-		else if (this.epsilonOnlyTransitions != e.isEpsilon()) {
-			console.error("ATN state %d has both epsilon and non-epsilon transitions.\n", this.stateNumber);
-			this.epsilonOnlyTransitions = false;
-		}
-
-		this.transitions.push(index, e);
-	},
-	transition:function(i){
-		return this.transitions[i];
-	},
-	setTransition:function(i, e){
-		this.transitions[i] = e;
-	},
-	removeTransition:function(index){
-		return this.transitions.splice(index, 1)[0];
-	},
-	onlyHasEpsilonTransitions:function() {
-		return this.epsilonOnlyTransitions;
-	},
-	setRuleIndex:function(ruleIndex) { this.ruleIndex = ruleIndex; }
-};
-
-function DecisionState(){
-	this.decision = -1;
-	this.nonGreedy = false;
-}
-DecisionState.prototype = Object.create(ATNState.prototype);
-DecisionState.prototype.className = 'DecisionState';
-function TokensStartState(){
-}
-TokensStartState.prototype = Object.create(DecisionState.prototype);
-mixin(TokensStartState.prototype, {
-	getStateType:function() {
-		return TOKEN_START;
-	},
-	className:'TokensStartState'
-});
-exports.TokensStartState = TokensStartState;
-
+	function LoopEndState(){}
+	extend(LoopEndState, ATNState, {
+		getStateType:function(){
+			return LOOP_END;
+		},
+		className:'LoopEndState'
+	});
+	exports.LoopEndState = LoopEndState;
+	
 })();
+
 function Transition(target){
 	if (target == null) {
 		throw new Error("target cannot be null.");
@@ -386,6 +504,55 @@ Transition.prototype={
 	label:function() { return null; }
 };
 
+function RuleTransition(ruleStart, ruleIndex, precedence, followState){
+	this.ruleIndex = 0;
+	this.precedence = 0;
+	if(arguments.length == 3)
+		RuleTransition(ruleStart, ruleIndex, 0, precedence)
+	else{
+		RuleTransition.superclass.call(this, ruleStart);
+		this.ruleIndex = ruleIndex;
+		this.precedence = precedence;
+		this.followState = followState;
+	}
+}
+extend(RuleTransition, Transition, {
+	getSerializationType:function() {
+		return Transition.RULE;
+	},
+	
+	isEpsilon:function() { return true; },
+	
+	matches:function(symbol, minVocabSymbol, maxVocabSymbol) {
+		return false;
+	}
+});
+
+function ActionTransition(target, ruleIndex, actionIndex, isCtxDependent){
+	if(actionIndex === undefined)
+		actionIndex = -1;
+	if(isCtxDependent === undefined)
+		isCtxDependent = false;
+	this.ruleIndex = ruleIndex;
+	this.actionIndex = actionIndex;
+	this.isCtxDependent = isCtxDependent;
+}
+extend(ActionTransition, Transition, {
+	getSerializationType:function() {
+		return Transition.ACTION;
+	},
+	isEpsilon:function() {
+		return true; // we are to be ignored by analysis 'cept for predicates
+	},
+	matches:function(symbol, minVocabSymbol, maxVocabSymbol) {
+		return false;
+	},
+	toString:function() {
+		return "action_"+ this.ruleIndex+":"+ this.actionIndex;
+	}
+});
+exports.RuleTransition = RuleTransition;
+exports.ActionTransition = ActionTransition;
 exports.Transition = Transition;
 exports.LL1Analyzer = LL1Analyzer;
 exports.ATN = ATN;
