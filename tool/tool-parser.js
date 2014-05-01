@@ -575,9 +575,9 @@ function alternative(){
 		while(is_element()){
 			e.push(element());
 		}
-		return {type: 'ALT', chr:e};
+		return {type: 'ALT', chr:e, className:'AltAST'};
 	}else{
-		return {type:'ALT', chr:[{type:'EPSILON'}]};
+		return {type:'ALT', chr:[{type:'EPSILON'}], className:'AltAST'};
 	}
 }
 /** 
