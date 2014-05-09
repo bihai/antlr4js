@@ -607,7 +607,7 @@ function element(){
 			var le = labeledElement();
 			if(lt(1, 'QUESTION', 'START', 'PLUS')){
 				var ret = ebnfSuffix();
-				ret.chr = [{type:'BLOCK', chr:[{type: 'ALT', chr: [le]}] }];
+				ret.chr = [{type:'BLOCK', chr:[{type: 'ALT', chr: [le], className:'AltAST'}] }];
 				return ret;
 			}
 			return le;
@@ -622,7 +622,8 @@ function element(){
 				type:'BLOCK',
 				chr:[{
 						type: 'ALT',
-						chr:[ ret ]
+						chr:[ ret ],
+						className:'AltAST'
 					} ]
 			}];
 			return bnf;
@@ -747,11 +748,11 @@ function lexerAlt(){
 		var le = lexerElements();
 		if(is_lexerCommands()){
 			var lc = lexerCommands();
-			return {type:'LEXER_ALT_ACTION', chr:[le].concat(lc)};
+			return {type:'LEXER_ALT_ACTION', chr:[le].concat(lc), className:'AltAST'};
 		}
 		return le;
 	}
-	return {type:'ALT', chr:[{type:'EPSILON'}]};
+	return {type:'ALT', chr:[{type:'EPSILON'}], className:'AltAST'};
 }
 function lexerElements(){
 	var les = [];
@@ -759,7 +760,7 @@ function lexerElements(){
 	while(is_lexerElement()){
 		les.push(lexerElement());
 	}
-	return {type:'ALT', chr: les};
+	return {type:'ALT', chr: les, className:'AltAST'};
 }
 function is_lexerElement(){
 	var tk = lt();
@@ -782,7 +783,7 @@ function lexerElement(){
 					chr:[
 						{
 							type: 'ALT',
-							chr:[ lbe ]
+							chr:[ lbe ], className:'AltAST'
 						}
 					]}];
 				return bnf;
@@ -818,7 +819,7 @@ function lexerElement(){
 				chr:[
 					{
 						type: 'ALT',
-						chr:[ lblock ]
+						chr:[ lblock ], className:'AltAST'
 					}
 				]}];
 			return bnf;

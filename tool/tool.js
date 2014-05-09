@@ -1642,7 +1642,7 @@ ParserATNFactory.prototype = {
 	_createATN:function(rules) {
 		this.createRuleStartAndStopATNStates();
 
-		var adaptor = new GrammarASTAdaptor();
+		//var adaptor = new GrammarASTAdaptor();
 		for (var i = 0,l = rules.length; i<l; i++) {
 			var r = rules[i];
 			// find rule's block
@@ -1655,7 +1655,10 @@ ParserATNFactory.prototype = {
 				this.rule(r.ast, r.name, h);
 			}
 			catch ( re) {
-				ErrorManager.fatalInternalError("bad grammar AST structure", re);
+				//todo:
+				//ErrorManager.fatalInternalError("bad grammar AST structure", re);
+				console.error("bad grammar AST structure");
+				throw re;
 			}
 		}
 	},
@@ -1757,14 +1760,56 @@ ParserATNFactory.prototype = {
 		starAST.atnState = entry;	// decision is to enter/exit; blk is its own decision
 		return new this.Handle(entry, end);
 	},
-	optional:function(){
-		todo
+	optional:function(optAST, blk){
+		var blkStart = blk.left;
+		var blkEnd = blk.right;
+		this.preventEpsilonOptionalBlocks.push({a:currentRule, b:blkStart, c:blkEnd});
+
+		var greedy = optAST._greedy;
+		blkStart.nonGreedy = !greedy;
+		this.epsilon(blkStart, blk.right, !greedy);
+
+		optAST.atnState = blk.left;
+		return blk;
 	},
-	plus:function(){
-		todo
+	plus:function(plusAST, blk){
+		var blkStart = blk.left;
+		var blkEnd = blk.right;
+		this.preventEpsilonClosureBlocks.push({a:currentRule, b:blkStart, c:blkEnd});
+
+		var loop = this.newState(rt.PlusLoopbackState, plusAST);
+		loop.nonGreedy = !plusAST._greedy;
+		atn.defineDecisionState(loop);
+		var end = this.newState(LoopEndState.class, plusAST);
+		blkStart.loopBackState = loop;
+		end.loopBackState = loop;
+
+		plusAST.atnState = blkStart;
+		this.epsilon(blkEnd, loop);		// blk can see loop back
+
+		var blkAST = plusAST.chr[0];
+		if ( plusAST._greedy ) {
+			if (this.expectNonGreedy(blkAST)) {
+				this.g.tool.errMgr.grammarError('EXPECTED_NON_GREEDY_WILDCARD_BLOCK', this.g.fileName, plusAST);
+			}
+
+			this.epsilon(loop, blkStart);	// loop back to start
+			this.epsilon(loop, end);			// or exit
+		}
+		else {
+			// if not greedy, priority to exit branch; make it first
+			this.epsilon(loop, end);			// exit
+			this.epsilon(loop, blkStart);	// loop back to start
+		}
+
+		return new this.Handle(blkStart, end);
 	},
-	epsilon:function(){
-		todo
+	epsilon:function(node){
+		var left = this.newState(node);
+		var right = this.newState(node);
+		this.epsilon(left, right);
+		node.atnState = left;
+		return new this.Handle(left, right);
 	},
 	expectNonGreedy:function(blkAST){
 		if ( this.blockHasWildcardAlt(blkAST) ) {
@@ -1781,11 +1826,11 @@ ParserATNFactory.prototype = {
 	},
 	blockHasWildcardAlt:function(block){
 		return block.chr.some(function(alt){
-			if ( !(alt instanceof AltAST) ) return false;
-			AltAST altAST = alt;
-			if ( altAST.getChildCount()==1 ) {
-				Tree e = altAST.getChild(0);
-				if ( e.getType()==ANTLRParser.WILDCARD ) {
+			if ( !(alt.className == 'AltAST') ) return false;
+			var altAST = alt;
+			if ( altAST.chr && altAST.chr.length ==1 ) {
+				var e = altAST.chr[0];
+				if ( e.type == ANTLRParser.WILDCARD ) {
 					return true;
 				}
 			}
@@ -1841,6 +1886,11 @@ mixin(LexerATNFactory.prototype, {
 
 		ATNOptimizer.optimize(g, atn);
 		return atn; */
+	},
+	lexerAltCommands:function( alt, cmds) {
+		var h = new this.Handle(alt.left, cmds.right);
+		this.epsilon(alt.right, cmds.left);
+		return h;
 	}
 });
 
@@ -1861,7 +1911,25 @@ ATNBuilder.prototype = {
 		return this.factory.block(blockAST, ebnfRoot, alts)
 	},
 	alternative:function(ast){
-		
+		var els = [];
+		if(ast.type == _A.LEXER_ALT_ACTION){
+			var a = this.alternative(ast.chr[0]);
+			if(ast.chr.length > 1)
+				var lc = this.lexerCommands(ast.chr[1]);
+			this.factory.lexerAltCommands(a, lc);
+		}else if(ast.type == _A.ALT){
+			if(ast.chr[0].type == _A.EPSILON)
+				return this.factory.epsilon(ast.chr[0]);
+			//todo
+		}
+	},
+	lexerCommands:function(ast){
+		var cmds = [];
+		ast.chr.forEach(function(lc){
+				var c = this.lexerCommand(lc);
+				if(c != null)
+					cmds.push(c);
+		}, this);
 	}
 };
 function ATNVisitor(){
