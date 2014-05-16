@@ -223,6 +223,13 @@ AST={
             if ( d!=null ) return d;
         }
         return null;
+	},
+	firstLeaf:function(tree){
+		var node = tree;
+		while(node.chr && node.chr.length > 0){
+			node = ast.chr[0];
+		}
+		return node;
 	}
 }
 AST.Token.prototype={
@@ -1836,6 +1843,38 @@ ParserATNFactory.prototype = {
 			}
 			return false;
 		});
+	},
+	alt:function(els) {
+		return this.elemList(els);
+	},
+	elemList:function(els){
+		var n = els.length;
+		for (var i = 0; i < n - 1; i++) {	// hook up elements (visit all but last)
+			var el = els[i];
+			// if el is of form o-x->o for x in {rule, action, pred, token, ...}
+			// and not last in alt
+            var tr = null;
+            if ( el.left.getNumberOfTransitions()==1 ) tr = el.left.transition(0);
+            var isRuleTrans = tr instanceof RuleTransition;
+            if ( el.left.getStateType() == ATNState.BASIC &&
+				el.right.getStateType()== ATNState.BASIC &&
+				tr!=null && (isRuleTrans && tr.followState == el.right || tr.target == el.right) )
+			{
+				// we can avoid epsilon edge to next el
+				if ( isRuleTrans ) tr.followState = els[i+1].left;
+                else tr.target = els[i+1].left;
+				this.atn.removeState(el.right); // we skipped over this state
+			}
+			else { // need epsilon if previous block's right end node is complicated
+				this.epsilon(el.right, els.get(i+1).left);
+			}
+		}
+		var first = els[0];
+		var last = els[n -1];
+		if ( first==null || last==null ) {
+			this.g.tool.errMgr.toolError('INTERNAL_ERROR', "element list has first|last == null");
+		}
+		return new this.Handle(first.left, last.right);
 	}
 };
 function LexerATNFactory(g){
@@ -1920,7 +1959,10 @@ ATNBuilder.prototype = {
 		}else if(ast.type == _A.ALT){
 			if(ast.chr[0].type == _A.EPSILON)
 				return this.factory.epsilon(ast.chr[0]);
-			//todo
+			ast.chr.forEarch(function(c){
+					els.push(this.element(c));
+			}, this);
+			return this.factory.alt(els);
 		}
 	},
 	lexerCommands:function(ast){
@@ -1930,6 +1972,119 @@ ATNBuilder.prototype = {
 				if(c != null)
 					cmds.push(c);
 		}, this);
+	},
+	lexerCommand:function(ast){
+		if(ast.type == _A.LEXER_ACTION_CALL)
+			return this.factory.lexerCallCommand(ast.chr[0], ast.chr[1]);
+		else if(ast.type == _A.ID)
+			return this.factory.lexerCommand(ast);
+		else
+			throw new Error('Incorrect AST type for lexerCommand, type: '+ ast.type);
+	},
+	element:function(ast){
+		switch(ast.type){
+			case _A.ASSIGN:
+			case _A.PLUS_ASSIGN:
+				return this.labeledElement(ast);
+			case _A.RANGE:
+			case _A.DOT:
+			case _A.WILDCARD:
+			case _A.SET:
+			case _A.STRING_LITERAL:
+			case _A.TOKEN_REF:
+			case _A.RULE_REF:
+				return this.atom(ast);
+			case _A.OPTIONAL:
+			case _A.CLOSURE:
+			case _A.POSITIVE_CLOSURE:
+			case _A.BLOCK:
+				return this.subrule(ast);
+			case _A.ACTION:
+				return this.factory.action(ast);
+			case _A.SEMPRED:
+				return this.factory.sempred(ast);
+			case _A.NOT:
+				return this.blockSet(true, ast.chr[0]);
+			case _A.LEXER_CHAR_SET:
+				return this.factory.charSetLiteral(ast);
+		}
+		//todo
+	},
+	labeledElement:function(ast){
+		if(ast.type == _A.ASSIGN){
+			return this.factory.label(this.element(ast.chr[1]));
+		}else if(ast.type == _A.PLUS_ASSIGN){
+			return this.factory.listLabel(this.element(ast.chr[1]));
+		}
+	},
+	atom:function(ast){
+		switch(ast.type){
+			case _A.RANGE:
+				return this.range();
+			case _A.DOT:
+				if(ast.chr.length == 2 && ast.chr[0].type == _A.ID){
+					if(ast.chr[1].type == _A.RULE_REF)
+						return this.ruleref(ast.chr[1]);
+					else
+						return this.terminal(ast.chr[1]);
+				}
+				break;
+			case _A.WILDCARD:
+				return this.factory.wildcard(ast);
+			case _A.SET:
+				return this.blockSet(false, ast);
+			case _A.STRING_LITERAL:
+			case _A.TOKEN_REF:
+				return this.terminal(ast);
+			case _A.RULE_REF:
+				return this.ruleref(ast);
+		}
+	},
+	range:function(ast){
+		return this.factory.range(ast.chr[0], ast.chr[1]);
+	},
+	blockSet:function(invert, ast){
+		var alts = [];
+		ast.chr.forEach(function(c){
+				alts.push(this.setElement(c));
+		}, this);
+		this.factory.set(ast, alts, invert);
+	},
+	terminal:function(ast){
+		if(ast.type == _A.STRING_LITERAL)
+			this.factory.stringLiteral(ast);
+		else if(ast.type == _A.TOKEN_REF)
+			this.factory.tokenRef(ast);
+	},
+	ruleref:function(ast){
+		return this.factory.ruleRef(ast);
+	},
+	subrule:function(ast){
+		switch(ast.type){
+		case _A.OPTIONAL:
+		case _A.CLOSURE:
+		case _A.POSITIVE_CLOSURE:
+			return this.block(ast, ast.chr[0]);
+		default:
+			return this.block(null, ast);
+		}
+	},
+	/** ^(BLOCK (^(OPTIONS .*))? (a=alternative {alts.add($a.p);})+) */
+	block:function(start, ast){
+		var alts = [];
+		alts.chr.forEach(function(c){
+				if(c.type == _A.OPTIONS)
+					return;
+				else
+					alts.push(this.alternative(c));
+		}, this);
+		this.factory.block(ast, start, alts);
+	},
+	setElement:function(ast){
+		return (ast.chr && ast.chr.length >0) ? ast.chr[0] : ast;
+	},
+	_findStart:function(ast){
+		return AST.firstLeaf(ast);
 	}
 };
 function ATNVisitor(){
