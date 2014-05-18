@@ -1,5 +1,7 @@
 var ANTLRParser = require('./constants.js').ANTLRParser;
 var util= require('util');
+var tool = require('./tool');
+var Grammar = tool.Grammar;
 
 module.exports = function(text){
 
@@ -444,6 +446,14 @@ function mismatch(expects){
 	return new Error(_location() + 'expect token:' + JSON.stringify(expects, null, '  ')
 		+' found:'+ util.inspect(lt()));
 }
+
+function _setNodeOptions(node, type){
+	var options = AST.getFirstChildWithType(node, type);
+	if ( options!=null ) {
+		Grammar.setNodeOptions(node, options);
+	}
+}
+
 function grammar(){
 	var g = grammarType();
 		g.chr = [];
@@ -457,7 +467,7 @@ function grammar(){
 		modeSpec();
 	}
 	match(EOF);
-	
+	_setNodeOptions(g, ANTLRParser.OPTIONS);
 	return g;
 }
 
@@ -515,7 +525,9 @@ function parserRule(){
 	match('COLON');
 	chr.push(ruleBlock());
 	match('SEMI');
-	return {type:'RULE', chr:chr};
+	var node = {type:'RULE', chr:chr};
+	_setNodeOptions(node, ANTLRParser.OPTIONS);
+	return node;
 }
 function rulePrequels(){
 	var ret = [];
@@ -567,15 +579,17 @@ function labeledAlt(){
 function alternative(){
 	
 	if(lt(1, 'LT') || is_element()){
-		var e = [];
+		var e = [], o = null;
 		if(lt(1, 'LT')){
-			e.push(elementOptions());
+			o = elementOptions();
+			e.push(o);
 		}
 		e.push(element());
 		while(is_element()){
 			e.push(element());
 		}
-		return {type: 'ALT', chr:e, className:'AltAST'};
+		var tree = {type: 'ALT', chr:e, className:'AltAST'};
+		Grammar.setNodeOptions(tree, o);
 	}else{
 		return {type:'ALT', chr:[{type:'EPSILON'}], className:'AltAST'};
 	}
@@ -720,6 +734,14 @@ function blockSuffix(){
 }
 function actionElement(){
 	//todo
+	if(lt(1, 'ACTION')){
+		var tk = consume();
+		if(lt(1, 'LT')){
+			var eo = elementOptions();
+			return {type:'ACTION', className:'ActionAST', chr:[eo]};
+		}
+		return {type:'ACTION', className:'ActionAST'};
+	}
 }
 function lexerRule(){
 	var chr = [];
@@ -878,6 +900,7 @@ function lexerAtom(){
 		throw mistach('STRING_LITERAL,TOKEN_REF,RULE_REF,NOT,DOT,LEXER_CHAR_SET');
 	}
 }
+
 function elementOptions(){
 	var chr = [];
 	consume();
@@ -927,7 +950,9 @@ function lexerBlock(){
 	}
 	chr = chr.concat(lexerAltList());
 	match('RPAREN');
-	return {type:'BLOCK', chr:chr};
+	var node = {type:'BLOCK', chr:chr};
+	_setNodeOptions(node, ANTLRParser.OPTIONS);
+	return node;
 }
 
 /** OPTIONS (option SEMI)* RBRACE -> ^(OPTIONS[$OPTIONS, "OPTIONS"] option*)

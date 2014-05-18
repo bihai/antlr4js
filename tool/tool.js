@@ -230,6 +230,10 @@ AST={
 			node = ast.chr[0];
 		}
 		return node;
+	},
+	getOptionString:function(tree, key){
+		var value = this.options != null? this.options[key] : null;
+		
 	}
 }
 AST.Token.prototype={
@@ -464,6 +468,7 @@ function Grammar(tool, ast){
 	this.maxTokenType = Token.MIN_USER_TOKEN_TYPE -1;
 	this.initTokenSymbolTables();
 }
+exports.Grammar = Grammar;
 Grammar.isTokenName=function(id) {
 	var  c = id.charAt(0);
 	return c.toUpperCase() == c;
@@ -509,6 +514,22 @@ Grammar.getStringLiteralAliasesFromLexerRules=function(ast){
 		}
 	},this);
 	return lexerRuleToStringLiteral;
+};
+
+Grammar.setNodeOptions = function( node, options) {
+	if ( options==null ) return;
+	var t = node;
+	if ( AST.getChildCount(t)==0 || AST.getChildCount(options)==0 ) return;
+	for (var i=0,l=AST.getChildCount(options);i<l;i++){
+		var c = options.chr[i];
+		if(t.options == null) t.options = {};
+		if ( c.type==ANTLRParser.ASSIGN ) {
+			t.options[c.chr[0].text] = c.chr[1];
+		}
+		else {
+			t.options[c.text] = null; // no arg such as ID<VarNodeType>
+		}
+	}
 };
 
 Grammar.prototype={
@@ -1875,6 +1896,34 @@ ParserATNFactory.prototype = {
 			this.g.tool.errMgr.toolError('INTERNAL_ERROR', "element list has first|last == null");
 		}
 		return new this.Handle(first.left, last.right);
+	},
+	label:function(t){
+		return t;
+	},
+	listLabel:function(t){
+		return t;
+	},
+	charSetLiteral:function(charSetAST){
+		return null;
+	},
+	sempred:function(pred) {
+		//todo
+		var left = this.newState(pred);
+		var right = this.newState(pred);
+
+		var p;
+		if (pred.getOptionString(LeftRecursiveRuleTransformer.PRECEDENCE_OPTION_NAME) != null) {
+			var precedence = Integer.parseInt(pred.getOptionString(LeftRecursiveRuleTransformer.PRECEDENCE_OPTION_NAME));
+			p = new PrecedencePredicateTransition(right, precedence);
+		}
+		else {
+			var isCtxDependent = UseDefAnalyzer.actionIsContextDependent(pred);
+			p = new PredicateTransition(right, currentRule.index, g.sempreds.get(pred), isCtxDependent);
+		}
+
+		left.addTransition(p);
+		pred.atnState = left;
+		return new Handle(left, right);
 	}
 };
 function LexerATNFactory(g){
